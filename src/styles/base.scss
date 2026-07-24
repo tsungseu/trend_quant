@@ -1,0 +1,252 @@
+@use 'tokens' as *;
+
+// ---- 重置 ----
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'Microsoft YaHei', 'Hiragino Sans GB', 'Helvetica Neue', Helvetica, Arial,
+    sans-serif;
+  background-color: $bg-app;
+  color: $text-primary;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+// 数字使用等宽 tabular，便于对齐
+.tnum,
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  font-family: 'JetBrains Mono', 'SF Mono', 'Roboto Mono', Menlo, Consolas,
+    monospace;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+// ---- 通用工具类 ----
+.up {
+  color: $up;
+}
+.down {
+  color: $down;
+}
+.flat {
+  color: $flat;
+}
+.muted {
+  color: $text-secondary;
+}
+.dim {
+  color: $text-tertiary;
+}
+.gold {
+  color: $gold;
+}
+.brand {
+  color: $brand;
+}
+
+// 滚动条
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  &:hover {
+    background: rgba(148, 163, 184, 0.35);
+  }
+}
+
+// ---- 面板卡片 ----
+.panel {
+  background: $bg-panel;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-4 $space-5;
+  border-bottom: 1px solid $border-subtle;
+
+  h3 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+  .sub {
+    font-size: 12px;
+    color: $text-tertiary;
+  }
+}
+
+// ---- 按钮 ----
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-2;
+  padding: 8px 16px;
+  border-radius: $radius-md;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all $transition-fast;
+  border: 1px solid transparent;
+  white-space: nowrap;
+
+  &.btn-primary {
+    background: $brand;
+    color: #fff;
+    &:hover {
+      background: $brand-hover;
+    }
+  }
+  &.btn-ghost {
+    background: $bg-panel-2;
+    border-color: $border-default;
+    color: $text-secondary;
+    &:hover {
+      color: $text-primary;
+      border-color: $border-strong;
+    }
+  }
+  &.btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
+
+// ---- 段选择器 ----
+.seg {
+  display: inline-flex;
+  background: $bg-panel-2;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  padding: 3px;
+  gap: 2px;
+
+  button {
+    padding: 5px 12px;
+    font-size: 12px;
+    color: $text-secondary;
+    border-radius: 7px;
+    transition: all $transition-fast;
+
+    &.active {
+      background: $bg-elevated;
+      color: $text-primary;
+    }
+    &:not(.active):hover {
+      color: $text-primary;
+    }
+  }
+}
+
+// ---- 徽章 ----
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 999px;
+  line-height: 1.6;
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  &.running {
+    color: $success;
+    background: rgba(34, 197, 94, 0.12);
+    &::before {
+      animation: pulse 1.6s $ease infinite;
+    }
+  }
+  &.stopped {
+    color: $text-tertiary;
+    background: rgba(148, 163, 184, 0.1);
+  }
+  &.paused {
+    color: $warning;
+    background: rgba(245, 183, 61, 0.12);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+// ---- 页面进入动画 ----
+.fade-enter-active {
+  transition: opacity 0.25s $ease, transform 0.25s $ease;
+}
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+// ---- 占位网格背景 ----
+.grid-bg {
+  background-image: linear-gradient(
+      rgba(148, 163, 184, 0.04) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
