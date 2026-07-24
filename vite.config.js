@@ -8,6 +8,8 @@ const emAgent = new https.Agent({ keepAlive: false })
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // 本地开发 base='/'；GitHub Pages 部署在 /trend_quant/ 子路径
+  base: process.env.NODE_ENV === 'production' ? '/trend_quant/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {
