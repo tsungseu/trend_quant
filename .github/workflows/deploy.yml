@@ -40,24 +40,3 @@ jobs:
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-  topics:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set repository topics
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api -X PUT repos/${{ github.repository }}/topics \
-            -f "names[]=vue" \
-            -f "names[]=vue3" \
-            -f "names[]=vite" \
-            -f "names[]=echarts" \
-            -f "names[]=quant" \
-            -f "names[]=quantitative-finance" \
-            -f "names[]=finance" \
-            -f "names[]=fund" \
-            -f "names[]=trading" \
-            -f "names[]=dashboard" \
-            -f "names[]=eastmoney"
