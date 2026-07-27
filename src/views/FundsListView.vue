@@ -19,6 +19,16 @@ onMounted(() => {
 function resolveMeta(code) {
   const core = getFund(code)
   if (core) return core
+  // 优先用搜索时缓存的元信息，其次 catalog，最后兜底
+  const m = store.getMeta(code)
+  if (m) {
+    return {
+      code, name: m.fullName || m.name, short: m.name, type: m.type, theme: m.theme || m.type,
+      themeColor: '#64748b', manager: '—', risk: '—',
+      pe: 0, pePct5y: 0.5, aum: 0, dividend: '0', fee: '—',
+      startNav: 1, vol: 0.02, trend: 'up',
+    }
+  }
   const c = fundCatalog.find((f) => f.code === code)
   if (c) {
     return {

@@ -383,6 +383,44 @@ export function fetchFundEstimate(code) {
   })
 }
 
+// ============================================================
+// 基金搜索（东方财富 FundSearchAPI）— JSONP 直连，全市场基金
+// ============================================================
+
+/**
+ * 搜索基金（全市场，支持代码/简称/拼音/主题）
+ * @param {string} keyword 关键词
+ * @returns {Promise<{code,name,fullName,type,theme}[]>}
+ */
+export async function searchFunds(keyword) {
+  const k = (keyword || '').trim()
+  if (!k) return []
+  const cb = 'fs_' + Math.random().toString(36).slice(2)
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { delete window[cb]; resolve([]) }, 7000)
+    window[cb] = (data) => {
+      clearTimeout(timer)
+      delete window[cb]
+      const datas = data?.Datas || []
+      // 过滤：只保留基金（CATEGORY=700 或有 FTYPE），排除股票
+      const funds = datas
+        .filter((it) => (it.CODE || it.FCODE) && (it.FundBaseInfo?.FTYPE || it.CATEGORY === 700))
+        .map((it) => ({
+          code: it.CODE || it.FCODE,
+          name: it.SHORTNAME || it.NAME,
+          fullName: it.NAME,
+          type: it.FundBaseInfo?.FTYPE || '基金',
+          theme: it.FundBaseInfo?.FUNDTYPE || '',
+        }))
+      resolve(funds)
+    }
+    const s = document.createElement('script')
+    s.onerror = () => { clearTimeout(timer); delete window[cb]; resolve([]) }
+    s.src = 'https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=' + encodeURIComponent(k) + '&callback=' + cb
+    document.head.appendChild(s)
+  })
+}
+
 // ---- secid 转换工具 ----
 // 输入支持：'SH600519'/'SZ000858'（带前缀）、'600519'（纯代码）、'1.600519'（已是 secid）
 export function toSecid(code) {

@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
-import { searchFunds } from '@/mock/fundCatalog'
+import { ref, watch, nextTick } from 'vue'
+import { searchFunds } from '@/api/eastmoney'
 import { useFundsStore } from '@/stores/funds'
 
 const props = defineProps({
@@ -10,15 +10,37 @@ const emit = defineEmits(['update:modelValue'])
 
 const store = useFundsStore()
 const keyword = ref('')
+const results = ref([])
+const searching = ref(false)
 const inputRef = ref(null)
+let debounceTimer = null
+let lastSearchId = 0
 
-const results = computed(() => searchFunds(keyword.value))
+// 搜索：防抖 300ms，避免每次按键都请求
+function doSearch(kw) {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(async () => {
+    const k = (kw || '').trim()
+    if (!k) { results.value = []; searching.value = false; return }
+    searching.value = true
+    const searchId = ++lastSearchId
+    const list = await searchFunds(k)
+    // 只采纳最后一次搜索结果（避免乱序覆盖）
+    if (searchId === lastSearchId) {
+      results.value = list.slice(0, 30)
+      searching.value = false
+    }
+  }, 300)
+}
+
+watch(keyword, doSearch)
 
 watch(
   () => props.modelValue,
   (open) => {
     if (open) {
       keyword.value = ''
+      results.value = []
       nextTick(() => inputRef.value?.focus())
     }
   }
@@ -28,8 +50,18 @@ function close() {
   emit('update:modelValue', false)
 }
 
-function toggle(code) {
-  store.toggleWatch(code)
+// 添加/移除自选：记录基金基础信息，供无核心元数据时显示
+function toggle(item) {
+  if (store.isWatched(item.code)) {
+    store.removeWatch(item.code)
+  } else {
+    store.addWatch(item.code, {
+      name: item.fullName,
+      short: item.name,
+      type: item.type,
+      theme: item.theme || item.type,
+    })
+  }
 }
 
 function isAdded(code) {
@@ -54,31 +86,31 @@ function isAdded(code) {
           </div>
           <div class="dlg-body">
             <div class="result-hint muted">
-              {{ keyword ? `搜索结果 ${results.length} 只` : '热门基金' }}
+              <span v-if="searching">搜索中…</span>
+              <span v-else-if="keyword && results.length">搜索结果 {{ results.length }} 只</span>
+              <span v-else-if="!keyword">输入基金代码 / 名称 / 拼音 / 主题搜索全市场基金</span>
             </div>
             <ul class="result-list">
               <li v-for="f in results" :key="f.code" class="result-item">
                 <div class="r-info">
                   <div class="r-name">
-                    {{ f.short }}
+                    {{ f.name }}
                     <span class="r-code num">{{ f.code }}</span>
-                    <span v-if="f.isCore" class="r-tag">已接入</span>
                   </div>
-                  <div class="r-sub muted">{{ f.name }}</div>
+                  <div class="r-sub muted">{{ f.fullName }}</div>
                   <div class="r-meta">
                     <span class="chip">{{ f.type }}</span>
-                    <span class="chip">{{ f.theme }}</span>
                   </div>
                 </div>
                 <button
                   class="r-add"
                   :class="{ added: isAdded(f.code) }"
-                  @click="toggle(f.code)"
+                  @click="toggle(f)"
                 >
                   {{ isAdded(f.code) ? '✓ 已添加' : '+ 自选' }}
                 </button>
               </li>
-              <li v-if="!results.length" class="empty">
+              <li v-if="!results.length && keyword && !searching" class="empty">
                 <div class="empty-ico">🔍</div>
                 <div>未找到匹配的基金</div>
                 <div class="muted">试试输入代码或简称</div>

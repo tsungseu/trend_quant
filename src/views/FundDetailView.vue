@@ -24,6 +24,14 @@ const ct = () => (void theme.theme, chartTheme())
 function resolveMeta(code) {
   const core = getFund(code)
   if (core) return core
+  const m = fundsStore.getMeta(code)
+  if (m) {
+    return {
+      code, name: m.fullName || m.name, short: m.name, type: m.type, theme: m.theme || m.type,
+      themeColor: '#64748b', manager: '—', risk: '—',
+      pe: 0, pePct5y: 0.5, aum: 0, dividend: '0', fee: '—',
+    }
+  }
   const c = fundCatalog.find((f) => f.code === code)
   if (c) {
     return {
@@ -49,7 +57,16 @@ const fund = computed(() => {
   return f
 })
 const peSeries = computed(() => getPESeries(fundMeta.value.code))
-const sig = computed(() => navs.value.length >= 2 ? buildSignals(fund.value, navs.value) : null)
+// sig：navs 不足时返回安全的空结构（避免模板里 .signals/.series/.drawdown 访问崩溃）
+const EMPTY_SIG = {
+  indicators: { ma5: 0, ma10: 0, ma20: 0, ma60: 0, rsi: 50, bollUpper: 0, bollLower: 0, macd: { dif: 0, dea: 0, hist: 0 }, atr: 0 },
+  series: { ma5: [], ma10: [], ma20: [], rsi: [], bollMid: [], bollUpper: [], bollLower: [], macdDif: [], macdDea: [], macdHist: [] },
+  drawdown: { maxDD: 0, peakIdx: 0, troughIdx: 0, recoveryFromTrough: 0 },
+  cross: { maCross: null, macdCross: null },
+  signals: { score: 0, action: 'hold', actionLevel: 'normal', actionText: '数据计算中…', reasons: [], buyPoint: 0, sellPoint: 0, stopLoss: 0, takeProfit: 0, buyLevels: [], sellLevels: [], rewardRisk: 0, currentPrice: 0, downsideToBuy: 0, upsideToSell: 0 },
+}
+const sig = computed(() => (navs.value.length >= 2 ? buildSignals(fund.value, navs.value) : EMPTY_SIG))
+const sigReady = computed(() => navs.value.length >= 2) // 是否已计算真实信号
 
 const slot = computed(() => fundsStore.byCode[route.params.code])
 
@@ -298,6 +315,7 @@ const rsiOption = computed(() => {
 const drawdownOption = computed(() => {
   const t = ct()
   const data = navs.value
+  if (!data.length) return {}
   const values = data.map((d) => d.nav)
   // 逐点回撤
   let peak = values[0]
@@ -490,7 +508,7 @@ const reasonsByTone = computed(() => {
     </section>
 
     <!-- 信号结论卡 -->
-    <section v-if="sig" class="signal-card panel" :class="sig.signals.action">
+    <section v-if="sigReady" class="signal-card panel" :class="sig.signals.action">
       <div class="sc-main">
         <div class="sc-action">
           <span class="sc-icon">{{ actionTag[sig.signals.action].icon }}</span>
@@ -532,7 +550,7 @@ const reasonsByTone = computed(() => {
     </section>
 
     <!-- 分批建仓计划 -->
-    <section v-if="sig" class="panel">
+    <section v-if="sigReady" class="panel">
       <div class="panel-title">
         <h3>🎯 分批建仓计划</h3>
         <span class="sub">基于 ATR={{ sig.indicators.atr }} 动态计算 · 适配波动率</span>
@@ -591,14 +609,14 @@ const reasonsByTone = computed(() => {
       <div class="panel">
         <div class="panel-title">
           <h3>回撤与修复</h3>
-          <span class="sub">最大回撤 {{ (sig.drawdown.maxDD * 100).toFixed(1) }}% · 修复 {{ (sig.drawdown.recoveryFromTrough * 100).toFixed(1) }}%</span>
+          <span v-if="sigReady" class="sub">最大回撤 {{ (sig.drawdown.maxDD * 100).toFixed(1) }}% · 修复 {{ (sig.drawdown.recoveryFromTrough * 100).toFixed(1) }}%</span>
         </div>
         <EChart :option="drawdownOption" height="240px" />
       </div>
     </div>
 
     <!-- MACD 副图 -->
-    <section v-if="sig" class="panel">
+    <section v-if="sigReady" class="panel">
       <div class="panel-title">
         <h3>MACD 动量指标</h3>
         <span class="sub">

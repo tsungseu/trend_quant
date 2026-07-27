@@ -131,16 +131,31 @@ export const useFundsStore = defineStore('funds', () => {
   }
 
   // ---- 自选管理 ----
+  // 非核心基金的搜索元信息缓存（来自东财搜索接口）
+  const metaCache = ref(loadJSON('quant-fund-meta', {}))
+  function persistMeta() { saveJSON('quant-fund-meta', metaCache.value) }
+
   function isWatched(code) {
     return watchlist.value.includes(code)
   }
-  function addWatch(code) {
+  function addWatch(code, meta) {
     if (!watchlist.value.includes(code)) {
       watchlist.value.push(code)
       persistWL()
-      // 自动拉净值
+      // 记录搜索元信息（供列表/详情显示名称类型）
+      if (meta) {
+        metaCache.value[code] = { ...meta }
+        persistMeta()
+      }
+      // 自动拉净值 + 估值 + 重仓股 + 档案
       if (!byCode.value[code]?.navs?.length) fetchOne(code)
+      fetchEstimate(code)
+      fetchHoldings(code)
+      fetchProfile(code)
     }
+  }
+  function getMeta(code) {
+    return metaCache.value[code] || null
   }
   function removeWatch(code) {
     watchlist.value = watchlist.value.filter((c) => c !== code)
@@ -194,6 +209,8 @@ export const useFundsStore = defineStore('funds', () => {
     loaded,
     watchlist,
     positions,
+    metaCache,
+    getMeta,
     ensure,
     fetchOne,
     fetchAll,
