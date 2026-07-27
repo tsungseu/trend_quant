@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 
 const routes = [
   {
@@ -76,7 +76,8 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  // GitHub Pages 无服务端 rewrite，用 hash 路由；本地开发用 history 路由
+  history: import.meta.env.PROD ? createWebHashHistory() : createWebHistory(),
   routes,
   scrollBehavior() {
     return { top: 0 }
