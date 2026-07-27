@@ -68,6 +68,18 @@ const updatedAt = computed(() =>
   enriched.value.map((e) => e.slot?.updatedAt).filter(Boolean).sort().pop()
 )
 
+// 线上 GitHub Pages 服务器在境外，东财/新浪接口对境外 IP 限制（-999），
+// 无法直接拿到真实数据；本地开发（境内 IP）正常。
+const isOnlineDemo = computed(() => location.hostname.endsWith('github.io'))
+const dataUnavailableHint = computed(() =>
+  isOnlineDemo.value ? '线上演示：数据源(东方财富)对境外IP限制，显示历史快照' : '实时数据未就绪，显示历史快照'
+)
+const dataUnavailableReason = computed(() =>
+  isOnlineDemo.value
+    ? 'GitHub Pages 服务器在境外，东方财富接口返回 -999 拒绝。本地运行 npm run dev 可看真实数据；线上需自建境内代理。'
+    : '接口请求失败，请检查网络'
+)
+
 async function refreshAll() {
   await store.fetchAll(252)
 }
@@ -123,7 +135,9 @@ const actionTag = {
         <span v-if="anyLoading" class="loading-dot"></span>
         <span v-if="anyLoading" class="muted">实时净值加载中…</span>
         <span v-else-if="updatedAt" class="muted">✓ 东方财富真实数据 · 更新于 {{ updatedAt }}</span>
-        <span v-else class="muted warn">⚠ 实时数据未就绪，显示历史快照</span>
+        <span v-else class="muted warn" :title="dataUnavailableReason">
+          ⚠ {{ dataUnavailableHint }}
+        </span>
       </span>
       <button class="btn btn-ghost btn-sm" :disabled="anyLoading" @click="refreshAll">
         <span :class="{ spinning: anyLoading }">↻</span> 刷新

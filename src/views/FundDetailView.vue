@@ -103,6 +103,10 @@ const sectorDist = computed(() => {
 })
 const holdingsSlot = computed(() => fundsStore.holdingsCache[route.params.code])
 const isWatched = computed(() => fundsStore.isWatched(route.params.code))
+const isOnlineDemo = computed(() => location.hostname.endsWith('github.io'))
+const onlineReason = computed(() =>
+  isOnlineDemo.value ? 'GitHub Pages 服务器在境外，东方财富接口对境外 IP 返回 -999 拒绝。本地 npm run dev 可看真实数据。' : '接口请求失败，请检查网络'
+)
 
 // 重仓股实时涨跌（腾讯行情）
 const holdingQuotes = ref({})
@@ -380,7 +384,7 @@ const reasonsByTone = computed(() => {
       <div class="detail-status">
         <span v-if="slot?.loading" class="muted"><span class="spin-dot"></span> 加载真实净值…</span>
         <span v-else-if="slot?.updatedAt" class="muted">✓ 真实数据 · {{ slot.updatedAt }}</span>
-        <span v-else-if="slot?.error" class="warn">⚠ {{ slot.error }}，显示历史快照</span>
+        <span v-else-if="slot?.error" class="warn" :title="onlineReason">⚠ {{ isOnlineDemo ? '线上演示：数据源对境外IP限制，显示历史快照' : (slot.error + '，显示历史快照') }}</span>
         <button class="btn btn-ghost btn-sm" :disabled="slot?.loading" @click="refresh">
           <span :class="{ spinning: slot?.loading }">↻</span> 刷新
         </button>
