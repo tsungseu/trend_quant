@@ -21,28 +21,40 @@ export const randInt = (rng, min, max) => Math.floor(rand(rng, min, max + 1))
 // 从数组随机取一项
 export const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)]
 
-// 数字保留 n 位小数
+// 数字保留 n 位小数（对非法输入兜底为 0，避免 NaN 污染页面）
 export const round = (n, digits = 2) => {
+  const x = Number(n)
+  if (!Number.isFinite(x)) return 0
   const p = Math.pow(10, digits)
-  return Math.round(n * p) / p
+  return Math.round(x * p) / p
 }
 
-// 数字千分位格式化
-export const fmtThousands = (n) =>
-  n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+// 数字千分位格式化（非法输入返回 '0'，避免出现 "NaN"）
+// 接受数字或纯数字字符串（含小数）；非数字字符串回退为 '0'
+export const fmtThousands = (n) => {
+  if (typeof n === 'string') {
+    if (!/^-?\d+(\.\d+)?$/.test(n)) return '0'
+    return n.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  }
+  const x = Number(n)
+  if (!Number.isFinite(x)) return '0'
+  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
 
 // 人民币金额格式化（带 ¥）
 export const fmtMoney = (n, digits = 2) =>
   '¥' + fmtThousands(round(n, digits).toFixed(digits))
 
-// 百分比格式化：传入小数 (0.12 -> "+12.00%")
+// 百分比格式化：传入小数 (0.12 -> "+12.00%")；非法输入返回 "0.00%"
 export const fmtPct = (ratio, digits = 2) => {
-  const pct = round(ratio * 100, digits)
-  return (ratio > 0 ? '+' : '') + pct.toFixed(digits) + '%'
+  const r = Number(ratio)
+  if (!Number.isFinite(r)) return (0).toFixed(digits) + '%'
+  const pct = round(r * 100, digits)
+  return (r > 0 ? '+' : '') + pct.toFixed(digits) + '%'
 }
 
 // 涨跌符号
-export const sign = (n) => (n > 0 ? '+' : '')
+export const sign = (n) => (Number(n) > 0 ? '+' : '')
 
 // 生成日期数组 (向前 days 天)，格式 YYYY-MM-DD
 export const genDates = (days, end = new Date('2026-07-17')) => {

@@ -206,10 +206,10 @@ export function buildSignals(fund, navs) {
   }
   if (maCross === 'golden') {
     score += 1.0
-    reasons.push({ tag: '✨金叉', tone: 'buy', text: 'MA5 上穿 MA10，短期金叉买入信号' })
+    reasons.push({ tag: '✨金叉', tone: 'buy', text: 'MA5 上穿 MA10，短期动量转强' })
   } else if (maCross === 'dead') {
     score -= 1.0
-    reasons.push({ tag: '💀死叉', tone: 'sell', text: 'MA5 下穿 MA10，短期死叉卖出信号' })
+    reasons.push({ tag: '💀死叉', tone: 'sell', text: 'MA5 下穿 MA10，短期动量转弱' })
   }
 
   // 2) MACD 动量（权重 25%）
@@ -282,13 +282,13 @@ export function buildSignals(fund, navs) {
 
   // ---- 综合评级（-6 ~ +6）----
   let action, actionLevel, actionText
-  if (score >= 3.0) { action = 'buy'; actionLevel = 'strong'; actionText = '强烈买入' }
-  else if (score >= 1.5) { action = 'buy'; actionLevel = 'normal'; actionText = '建议买入' }
-  else if (score >= 0.5) { action = 'buy'; actionLevel = 'light'; actionText = '可逢低轻仓' }
-  else if (score <= -3.0) { action = 'sell'; actionLevel = 'strong'; actionText = '强烈卖出' }
-  else if (score <= -1.5) { action = 'sell'; actionLevel = 'normal'; actionText = '建议卖出' }
-  else if (score <= -0.5) { action = 'sell'; actionLevel = 'light'; actionText = '可逢高减仓' }
-  else { action = 'hold'; actionLevel = 'normal'; actionText = '观望持有' }
+  if (score >= 3.0) { action = 'buy'; actionLevel = 'strong'; actionText = '模型强偏多' }
+  else if (score >= 1.5) { action = 'buy'; actionLevel = 'normal'; actionText = '模型偏多观察' }
+  else if (score >= 0.5) { action = 'buy'; actionLevel = 'light'; actionText = '低位观察' }
+  else if (score <= -3.0) { action = 'sell'; actionLevel = 'strong'; actionText = '模型强风险' }
+  else if (score <= -1.5) { action = 'sell'; actionLevel = 'normal'; actionText = '模型偏空观察' }
+  else if (score <= -0.5) { action = 'sell'; actionLevel = 'light'; actionText = '高位风险观察' }
+  else { action = 'hold'; actionLevel = 'normal'; actionText = '中性观察' }
 
   // ============================================================
   // 买卖点位 —— 基于 ATR 动态计算（适配各基金波动率）

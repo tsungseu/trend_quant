@@ -5,6 +5,8 @@ import { funds as fundMeta, getNavSeries, getFund, computeSnapshot } from '@/moc
 import { fundCatalog } from '@/mock/fundCatalog'
 import { buildSignals } from '@/mock/indicators'
 import { fmtPct, sign, fmtMoney } from '@/mock/_helpers'
+import { dataModeLabel } from '@/config/runtime'
+import { DATA_QUALITY, DATA_SOURCE, isReliableQuality, makeMock, qualityClass, qualityLabel } from '@/utils/dataQuality'
 import { useFundsStore } from '@/stores/funds'
 import FundAddDialog from '@/components/FundAddDialog.vue'
 
@@ -41,35 +43,60 @@ function resolveMeta(code) {
   return { code, name: code, short: code, type: '', theme: '', themeColor: '#64748b', pe: 0, pePct5y: 0.5 }
 }
 
-// 当前自选的基金（优先真实净值，回退 mock）
+function mockMeta(navs) {
+  return makeMock(navs, navs[navs.length - 1]?.date || '')
+}
+
+// 当前自选的基金（优先真实净值，回退 mock；信号按数据质量分为正式模型观察/历史样例观察）
 const enriched = computed(() =>
   store.watchlist.map((code) => {
     const meta = resolveMeta(code)
     const real = store.navSeries(code)
-    const navs = real.length ? real : getNavSeries(code)
+    const realMeta = store.navMeta(code)
+    const fallback = getNavSeries(code)
+    const usingReal = real.length > 0
+    const navs = usingReal ? real : fallback
+    const dataMeta = usingReal ? realMeta : mockMeta(navs)
+    const reliable = usingReal && isReliableQuality(dataMeta)
     const fund = { ...meta }
     const snap = computeSnapshot(navs)
     if (snap) Object.assign(fund, snap)
     const sig = navs.length >= 2 ? buildSignals(fund, navs) : null
-    return { fund, sig, slot: store.byCode[code] }
+    const signalMode = reliable ? 'model' : sig ? 'sample' : 'none'
+    return { fund, sig, slot: realMeta, dataMeta, reliable, signalMode, usingReal }
   })
 )
 
 const stats = computed(() => {
-  const withSig = enriched.value.filter((e) => e.sig)
-  const buy = withSig.filter((e) => e.sig.signals.action === 'buy').length
-  const sell = withSig.filter((e) => e.sig.signals.action === 'sell').length
-  return { buy, sell, hold: withSig.length - buy - sell }
+  const formal = enriched.value.filter((e) => e.signalMode === 'model' && e.sig)
+  const buy = formal.filter((e) => e.sig.signals.action === 'buy').length
+  const sell = formal.filter((e) => e.sig.signals.action === 'sell').length
+  return { buy, sell, hold: formal.length - buy - sell }
 })
 
-// ---- 持仓汇总（用真实净值算盈亏）----
+const dataSummary = computed(() => {
+  const real = enriched.value.filter((e) => e.reliable).length
+  const snapshot = enriched.value.filter((e) => e.dataMeta?.quality === DATA_QUALITY.MOCK).length
+  const unavailable = enriched.value.filter((e) => e.dataMeta?.quality === DATA_QUALITY.UNAVAILABLE || !e.fund.nav).length
+  const cached = enriched.value.filter((e) => e.dataMeta?.quality === DATA_QUALITY.CACHED).length
+  return { real, snapshot, unavailable, cached }
+})
+
+// ---- 持仓汇总（用可用净值算盈亏；若使用快照会标注估算）----
 const currentNav = (code) => {
   const e = enriched.value.find((x) => x.fund.code === code)
   return e?.fund?.nav || 0
 }
 const portfolio = computed(() => store.portfolioSummary(currentNav))
+const portfolioUsesFallback = computed(() =>
+  portfolio.value.items.some((item) => {
+    const e = enriched.value.find((x) => x.fund.code === item.code)
+    return e && !e.reliable
+  })
+)
 // 实时估值（fundgz）
 const estOf = (code) => store.getEstimate(code)
+const estMetaOf = (code) => store.getEstimateMeta(code)
 
 const anyLoading = computed(() =>
   enriched.value.some((e) => e.slot?.loading)
@@ -78,20 +105,15 @@ const updatedAt = computed(() =>
   enriched.value.map((e) => e.slot?.updatedAt).filter(Boolean).sort().pop()
 )
 
-// 线上 GitHub Pages 服务器在境外，东财/新浪接口对境外 IP 限制（-999），
-// 无法直接拿到真实数据；本地开发（境内 IP）正常。
-const isOnlineDemo = computed(() => location.hostname.endsWith('github.io'))
-const dataUnavailableHint = computed(() =>
-  isOnlineDemo.value ? '线上演示：数据源(东方财富)对境外IP限制，显示历史快照' : '实时数据未就绪，显示历史快照'
-)
-const dataUnavailableReason = computed(() =>
-  isOnlineDemo.value
-    ? 'GitHub Pages 服务器在境外，东方财富接口返回 -999 拒绝。本地运行 npm run dev 可看真实数据；线上需自建境内代理。'
-    : '接口请求失败，请检查网络'
-)
+const dataStatusText = computed(() => {
+  if (anyLoading.value) return '净值加载中…'
+  const { real, snapshot, unavailable, cached } = dataSummary.value
+  if (real || cached) return `真实可用 ${real} 只 / 缓存 ${cached} 只 / 快照 ${snapshot} 只 / 不可用 ${unavailable} 只`
+  return `${dataModeLabel()}：当前显示历史快照或不可用状态`
+})
 
 async function refreshAll() {
-  await store.fetchAll(252)
+  await store.fetchAll(252, { force: true })
 }
 function removeWatch(code) {
   store.removeWatch(code)
@@ -101,6 +123,21 @@ const actionTag = {
   buy: { cls: 'buy', icon: '▲' },
   sell: { cls: 'sell', icon: '▼' },
   hold: { cls: 'hold', icon: '●' },
+}
+
+function actionText(e) {
+  if (e.signalMode === 'sample') return '历史样例观察'
+  return e.sig?.signals.actionText || '数据加载中'
+}
+
+function actionCls(e) {
+  if (e.signalMode !== 'model') return 'hold'
+  return actionTag[e.sig.signals.action].cls
+}
+
+function actionIcon(e) {
+  if (e.signalMode !== 'model') return '○'
+  return actionTag[e.sig.signals.action].icon
 }
 </script>
 
@@ -113,7 +150,7 @@ const actionTag = {
         <div class="val brand num">{{ enriched.length }} <span class="dim">只</span></div>
       </div>
       <div class="sm">
-        <div class="lbl">持仓市值</div>
+        <div class="lbl">持仓市值 <span v-if="portfolioUsesFallback" class="estimate-note">估算</span></div>
         <div class="val gold num">{{ fmtMoney(portfolio.marketValue).replace('¥', '¥ ') }}</div>
       </div>
       <div class="sm">
@@ -124,11 +161,11 @@ const actionTag = {
         </div>
       </div>
       <div class="sm">
-        <div class="lbl">建议买入</div>
+        <div class="lbl">模型偏多</div>
         <div class="val up num">{{ stats.buy }} <span class="dim">只</span></div>
       </div>
       <div class="sm">
-        <div class="lbl">建议卖出</div>
+        <div class="lbl">模型偏空</div>
         <div class="val down num">{{ stats.sell }} <span class="dim">只</span></div>
       </div>
       <div class="sm action">
@@ -139,14 +176,17 @@ const actionTag = {
       </div>
     </section>
 
+    <div class="research-note panel">
+      模型信号仅用于量化研究和价格提醒，不构成投资建议。历史快照数据只展示样例观察，不触发正式价格提醒。
+    </div>
+
     <!-- 数据状态条 -->
     <div class="data-bar">
       <span class="data-status">
         <span v-if="anyLoading" class="loading-dot"></span>
-        <span v-if="anyLoading" class="muted">实时净值加载中…</span>
-        <span v-else-if="updatedAt" class="muted">✓ 东方财富真实数据 · 更新于 {{ updatedAt }}</span>
-        <span v-else class="muted warn" :title="dataUnavailableReason">
-          ⚠ {{ dataUnavailableHint }}
+        <span class="muted" :class="{ warn: !dataSummary.real && !anyLoading }">
+          {{ dataStatusText }}
+          <template v-if="updatedAt"> · 更新于 {{ updatedAt }}</template>
         </span>
       </span>
       <button class="btn btn-ghost btn-sm" :disabled="anyLoading" @click="refreshAll">
@@ -157,92 +197,97 @@ const actionTag = {
     <!-- 基金卡片 -->
     <section v-if="enriched.length" class="grid">
       <RouterLink
-        v-for="{ fund, sig, slot } in enriched"
-        :key="fund.code"
-        :to="`/funds/${fund.code}`"
+        v-for="item in enriched"
+        :key="item.fund.code"
+        :to="`/funds/${item.fund.code}`"
         class="fund-card panel"
       >
         <!-- 头部：信号 + 名称 -->
         <div class="fc-head">
-          <div class="fc-theme" :style="{ background: fund.themeColor + '22', color: fund.themeColor }">
-            {{ fund.short.charAt(0) }}
+          <div class="fc-theme" :style="{ background: item.fund.themeColor + '22', color: item.fund.themeColor }">
+            {{ item.fund.short.charAt(0) }}
           </div>
           <div class="fc-info">
             <div class="fc-name">
-              {{ fund.short }}
-              <span class="fc-code">{{ fund.code }}</span>
+              {{ item.fund.short }}
+              <span class="fc-code">{{ item.fund.code }}</span>
             </div>
-            <div class="fc-sub">{{ fund.theme }} · {{ fund.type }}</div>
+            <div class="fc-sub">{{ item.fund.theme }} · {{ item.fund.type }}</div>
           </div>
-          <span v-if="sig" class="action-badge" :class="[actionTag[sig.signals.action].cls, sig.signals.actionLevel]">
-            {{ actionTag[sig.signals.action].icon }} {{ sig.signals.actionText }}
+          <span v-if="item.sig" class="action-badge" :class="[actionCls(item), item.signalMode === 'model' ? item.sig.signals.actionLevel : '']">
+            {{ actionIcon(item) }} {{ actionText(item) }}
           </span>
           <span v-else class="action-badge hold">○ 数据加载中</span>
-          <button class="fc-remove" title="取消自选" @click.prevent.stop="removeWatch(fund.code)">✕</button>
+          <button class="fc-remove" title="取消自选" @click.prevent.stop="removeWatch(item.fund.code)">✕</button>
+        </div>
+
+        <div class="quality-line">
+          <span class="q-tag" :class="qualityClass(item.dataMeta)" :title="item.dataMeta?.error || ''">{{ qualityLabel(item.dataMeta) }}</span>
+          <span v-if="item.dataMeta?.asOf" class="q-asof">截至 {{ item.dataMeta.asOf }}</span>
         </div>
 
         <!-- 净值 -->
         <div class="fc-nav">
-          <div class="nav-val num" :class="fund.changePct > 0 ? 'up' : 'down'">
-            {{ fund.nav ? fund.nav.toFixed(4) : '—' }}
-            <span class="nav-chg num" v-if="fund.change !== undefined">
-              {{ sign(fund.change) }}{{ fund.change }} ({{ fmtPct(fund.changePct) }})
+          <div class="nav-val num" :class="item.fund.changePct > 0 ? 'up' : 'down'">
+            {{ item.fund.nav ? item.fund.nav.toFixed(4) : '—' }}
+            <span class="nav-chg num" v-if="item.fund.change !== undefined">
+              {{ sign(item.fund.change) }}{{ item.fund.change }} ({{ fmtPct(item.fund.changePct) }})
             </span>
           </div>
           <div class="nav-label">
             单位净值
-            <span v-if="estOf(fund.code)" class="est-inline">
-              · 估值 <b class="num" :class="estOf(fund.code).gszzl > 0 ? 'up' : 'down'">{{ estOf(fund.code).gsz.toFixed(4) }} ({{ estOf(fund.code).gszzl > 0 ? '+' : '' }}{{ estOf(fund.code).gszzl }}%)</b>
+            <span v-if="estOf(item.fund.code)" class="est-inline" :title="qualityLabel(estMetaOf(item.fund.code))">
+              · 估值 <b class="num" :class="estOf(item.fund.code).gszzl > 0 ? 'up' : 'down'">{{ estOf(item.fund.code).gsz.toFixed(4) }} ({{ estOf(item.fund.code).gszzl > 0 ? '+' : '' }}{{ estOf(item.fund.code).gszzl }}%)</b>
             </span>
           </div>
         </div>
 
-        <template v-if="sig">
+        <template v-if="item.sig">
         <!-- 关键指标网格 -->
         <div class="fc-metrics">
           <div class="m">
             <span class="ml">PE</span>
-            <span class="mv num">{{ fund.pe || '—' }}</span>
-            <span v-if="fund.pe" class="mp num" :class="fund.pePct5y <= 0.3 ? 'up' : fund.pePct5y >= 0.7 ? 'down' : ''">
-              {{ (fund.pePct5y * 100).toFixed(0) }}%分位
+            <span class="mv num">{{ item.fund.pe || '—' }}</span>
+            <span v-if="item.fund.pe" class="mp num" :class="item.fund.pePct5y <= 0.3 ? 'up' : item.fund.pePct5y >= 0.7 ? 'down' : ''">
+              {{ (item.fund.pePct5y * 100).toFixed(0) }}%分位
             </span>
           </div>
           <div class="m">
             <span class="ml">最大回撤</span>
-            <span class="mv num down">{{ (sig.drawdown.maxDD * 100).toFixed(1) }}%</span>
+            <span class="mv num down">{{ (item.sig.drawdown.maxDD * 100).toFixed(1) }}%</span>
           </div>
           <div class="m">
             <span class="ml">RSI</span>
-            <span class="mv num" :class="sig.indicators.rsi < 30 ? 'up' : sig.indicators.rsi > 70 ? 'down' : ''">
-              {{ sig.indicators.rsi }}
+            <span class="mv num" :class="item.sig.indicators.rsi < 30 ? 'up' : item.sig.indicators.rsi > 70 ? 'down' : ''">
+              {{ item.sig.indicators.rsi }}
             </span>
           </div>
           <div class="m">
             <span class="ml">修复度</span>
-            <span class="mv num" :class="sig.drawdown.recoveryFromTrough > 0 ? 'up' : 'down'">
-              {{ (sig.drawdown.recoveryFromTrough * 100).toFixed(1) }}%
+            <span class="mv num" :class="item.sig.drawdown.recoveryFromTrough > 0 ? 'up' : 'down'">
+              {{ (item.sig.drawdown.recoveryFromTrough * 100).toFixed(1) }}%
             </span>
           </div>
         </div>
 
-        <!-- 建议点位 -->
+        <!-- 观察点位 -->
         <div class="fc-points">
           <div class="pt buy">
-            <span class="pt-l">建议买入</span>
-            <span class="pt-v num">{{ sig.signals.buyPoint }}</span>
-            <span class="pt-g num">{{ (sig.signals.downsideToBuy * 100).toFixed(1) }}%</span>
+            <span class="pt-l">低位参考</span>
+            <span class="pt-v num">{{ item.sig.signals.buyPoint }}</span>
+            <span class="pt-g num">{{ (item.sig.signals.downsideToBuy * 100).toFixed(1) }}%</span>
           </div>
           <div class="pt sell">
-            <span class="pt-l">建议卖出</span>
-            <span class="pt-v num">{{ sig.signals.sellPoint }}</span>
-            <span class="pt-g num">+{{ (sig.signals.upsideToSell * 100).toFixed(1) }}%</span>
+            <span class="pt-l">高位参考</span>
+            <span class="pt-v num">{{ item.sig.signals.sellPoint }}</span>
+            <span class="pt-g num">+{{ (item.sig.signals.upsideToSell * 100).toFixed(1) }}%</span>
           </div>
         </div>
 
         <!-- 信号理由（取最强的2条）-->
         <div class="fc-reasons">
           <div
-            v-for="r in sig.signals.reasons.filter(x => x.tone !== 'hold').slice(0, 2)"
+            v-for="r in item.sig.signals.reasons.filter(x => x.tone !== 'hold').slice(0, 2)"
             :key="r.tag"
             class="reason-chip"
             :class="r.tone"
@@ -275,6 +320,13 @@ const actionTag = {
   display: flex;
   flex-direction: column;
   gap: $space-5;
+}
+
+.research-note {
+  padding: $space-3 $space-5;
+  font-size: 12px;
+  color: $text-secondary;
+  border-left: 3px solid $warning;
 }
 
 .data-bar {
@@ -318,6 +370,7 @@ const actionTag = {
   flex-direction: column;
   gap: 4px;
   .lbl { font-size: 12px; color: $text-secondary; }
+  .estimate-note { color: $warning; font-size: 10px; }
   .val {
     font-size: 22px;
     font-weight: 700;
@@ -351,7 +404,7 @@ const actionTag = {
   display: flex;
   align-items: center;
   gap: $space-3;
-  margin-bottom: $space-4;
+  margin-bottom: $space-3;
 }
 .fc-theme {
   width: 40px; height: 40px;
@@ -381,6 +434,24 @@ const actionTag = {
   }
 }
 .fc-sub { font-size: 11px; color: $text-tertiary; margin-top: 2px; }
+
+.quality-line {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  margin-bottom: $space-3;
+}
+.q-tag {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: $bg-panel-2;
+  color: $text-tertiary;
+  &.real { color: $success; background: rgba(34,197,94,0.12); }
+  &.warn { color: $warning; background: rgba(245,183,61,0.12); }
+  &.fallback { color: $text-tertiary; }
+}
+.q-asof { font-size: 10px; color: $text-tertiary; }
 
 .action-badge {
   padding: 5px 10px;

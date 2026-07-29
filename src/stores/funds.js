@@ -1,163 +1,289 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { fetchFundNav, fetchFundHoldings, fetchFundEstimate, fetchFundProfile } from '@/api/eastmoney'
+import { ref } from 'vue'
+import { fetchFundNav, fetchFundHoldings, fetchFundEstimate, fetchFundProfile } from '@/api/dataClient'
 import { funds as fundMeta } from '@/mock/funds'
+import { runtime } from '@/config/runtime'
+import { DATA_QUALITY, DATA_SOURCE, makeDataState, makeUnavailable, isTradableQuality } from '@/utils/dataQuality'
+import { safeLoad, safeSave, normalizeCode, normalizeWatchlist, normalizePositions, normalizeFundMeta, cleanText, clampNumber } from '@/utils/storage'
 
 // ---- localStorage 持久化（自选 + 仓位）----
 const WL_KEY = 'quant-fund-watchlist'
 const POS_KEY = 'quant-fund-positions'
+const META_KEY = 'quant-fund-meta'
 
-const loadJSON = (k, fb) => {
-  try {
-    const v = localStorage.getItem(k)
-    return v ? JSON.parse(v) : fb
-  } catch {
-    return fb
+const defaultCodes = fundMeta.map((f) => f.code)
+const defaultPositions = {
+  '019305': { shares: 50000, costPrice: 1.52 },
+  '017731': { shares: 20000, costPrice: 3.62 },
+  '019018': { shares: 8000, costPrice: 7.80 },
+  '018230': { shares: 30000, costPrice: 1.95 },
+}
+
+function dataSource() {
+  return runtime.dataMode === 'proxy' ? DATA_SOURCE.GATEWAY : DATA_SOURCE.EASTMONEY
+}
+
+function estimateSource() {
+  return runtime.dataMode === 'proxy' ? DATA_SOURCE.GATEWAY : DATA_SOURCE.SINA
+}
+
+function emptyNavSlot() {
+  return {
+    navs: [],
+    data: [],
+    loading: false,
+    error: null,
+    updatedAt: null,
+    fetchedAt: null,
+    asOf: '',
+    source: DATA_SOURCE.LOCAL,
+    quality: DATA_QUALITY.UNAVAILABLE,
+    isFallback: false,
   }
 }
-const saveJSON = (k, v) => {
-  try {
-    localStorage.setItem(k, JSON.stringify(v))
-  } catch {}
-}
 
-// 基金 store：真实净值（东方财富）+ 自选 + 仓位
+// 基金 store：真实净值 + 自选 + 仓位 + 数据质量
 export const useFundsStore = defineStore('funds', () => {
-  // byCode[code] = { navs:[{date,nav,changePct}], loading, error, updatedAt }
+  // byCode[code] = { navs:[{date,nav,changePct}], loading, error, updatedAt, source, quality, asOf }
   const byCode = ref({})
   const loaded = ref(false)
 
-  // 自选基金代码列表（持久化）。默认包含 4 只核心基金
-  const watchlist = ref(loadJSON(WL_KEY, fundMeta.map((f) => f.code)))
-  // 仓位：{ [code]: { shares, costPrice } }（持仓份额 + 成本净值，持久化）
-  const positions = ref(loadJSON(POS_KEY, {
-    '019305': { shares: 50000, costPrice: 1.52 },
-    '017731': { shares: 20000, costPrice: 3.62 },
-    '019018': { shares: 8000, costPrice: 7.80 },
-    '018230': { shares: 30000, costPrice: 1.95 },
-  }))
+  const watchlist = ref(safeLoad(WL_KEY, defaultCodes, (v) => normalizeWatchlist(v, defaultCodes)))
+  const positions = ref(safeLoad(POS_KEY, defaultPositions, normalizePositions))
+
+  const metaCache = ref(safeLoad(META_KEY, {}, normalizeFundMeta))
+  const holdingsCache = ref({}) // code -> data state
+  const estimateCache = ref({}) // code -> data state
+  const profileCache = ref({}) // code -> data state
+
+  const navInFlight = new Map()
+  const estimateInFlight = new Map()
+  const holdingsInFlight = new Map()
+  const profileInFlight = new Map()
+  const requestSeq = {}
 
   // ---- 持久化 ----
-  function persistWL() { saveJSON(WL_KEY, watchlist.value) }
-  function persistPos() { saveJSON(POS_KEY, positions.value) }
+  function persistWL() { safeSave(WL_KEY, watchlist.value) }
+  function persistPos() { safeSave(POS_KEY, positions.value) }
+  function persistMeta() { safeSave(META_KEY, metaCache.value) }
 
-  function ensure(code) {
-    if (!byCode.value[code]) {
-      byCode.value[code] = { navs: [], loading: false, error: null, updatedAt: null }
-    }
+  function ensure(rawCode) {
+    const code = normalizeCode(rawCode) || String(rawCode || '')
+    if (!byCode.value[code]) byCode.value[code] = emptyNavSlot()
     return byCode.value[code]
   }
 
   // ---- 净值拉取 ----
-  async function fetchOne(code, days = 252) {
-    const slot = ensure(code)
-    slot.loading = true
-    slot.error = null
-    try {
-      const navs = await fetchFundNav(code, days)
-      slot.navs = navs
-      slot.updatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  async function fetchOne(rawCode, days = 252, options = {}) {
+    const code = normalizeCode(rawCode)
+    if (!code) throw new Error('invalid fund code')
+    if (!options.force && navInFlight.has(code)) return navInFlight.get(code)
+
+    const task = (async () => {
+      const slot = ensure(code)
+      const seq = (requestSeq[code] || 0) + 1
+      requestSeq[code] = seq
+      slot.loading = true
       slot.error = null
-    } catch (e) {
-      slot.error = e.message || 'fetch failed'
-      console.warn('[funds] fetch', code, 'failed:', e.message)
-    } finally {
-      slot.loading = false
-    }
+      try {
+        const navs = await fetchFundNav(code, days)
+        const clean = Array.isArray(navs)
+          ? navs.filter((n) => n?.date && Number.isFinite(+n.nav) && +n.nav > 0).map((n) => ({ ...n, nav: +n.nav }))
+          : []
+        if (!clean.length) throw new Error('no nav data for ' + code)
+        if (requestSeq[code] !== seq) return slot
+        const state = makeDataState(clean, {
+          source: dataSource(),
+          quality: DATA_QUALITY.EOD,
+          asOf: clean[clean.length - 1]?.date || '',
+        })
+        Object.assign(slot, state, { navs: clean, data: clean, loading: false, error: null })
+      } catch (e) {
+        if (requestSeq[code] !== seq) return slot
+        slot.error = e.message || 'fetch failed'
+        if (!slot.navs?.length) {
+          Object.assign(slot, makeUnavailable(slot.error, dataSource()), { navs: [], data: [], loading: false })
+        } else {
+          slot.quality = DATA_QUALITY.CACHED
+          slot.isFallback = false
+          slot.loading = false
+        }
+        console.warn('[funds] fetch', code, 'failed:', e.message)
+      } finally {
+        if (requestSeq[code] === seq) slot.loading = false
+      }
+      return slot
+    })()
+
+    navInFlight.set(code, task)
+    try { return await task } finally { if (navInFlight.get(code) === task) navInFlight.delete(code) }
   }
 
-  async function fetchAll(days = 252) {
-    // 拉取所有自选基金的真实净值 + 实时估值
-    const codes = watchlist.value.length ? watchlist.value : fundMeta.map((f) => f.code)
-    const toFetch = loaded.value
-      ? codes.filter((c) => !byCode.value[c]?.navs?.length)
-      : codes
-    await Promise.all(toFetch.map((c) => fetchOne(c, days)))
-    // 实时估值（fundgz，QDII 无估值自动降级）
-    await Promise.all(codes.map((c) => fetchEstimate(c)))
+  async function fetchAll(days = 252, options = {}) {
+    // 仅首次未加载时用 defaultCodes 兜底；用户主动清空 watchlist 后保持空，不再拉默认基金
+    const codes = (!loaded.value && !watchlist.value.length ? defaultCodes : watchlist.value).map(normalizeCode).filter(Boolean)
+    const toFetch = options.force || !loaded.value
+      ? codes
+      : codes.filter((c) => !byCode.value[c]?.navs?.length)
+    await Promise.allSettled(toFetch.map((c) => fetchOne(c, days, options)))
+    await Promise.allSettled(codes.map((c) => fetchEstimate(c, options)))
     loaded.value = true
   }
 
   async function refresh(code, days = 252) {
-    return fetchOne(code, days)
+    return fetchOne(code, days, { force: true })
+  }
+
+  async function hydrateFund(code, options = {}) {
+    const c = normalizeCode(code)
+    if (!c) return []
+    return Promise.allSettled([
+      fetchOne(c, 252, options),
+      fetchEstimate(c, options),
+      fetchHoldings(c, options),
+      fetchProfile(c, options),
+    ])
   }
 
   function navSeries(code) {
     return byCode.value[code]?.navs || []
   }
 
+  function navMeta(code) {
+    return byCode.value[code] || null
+  }
+
   // ---- 重仓股缓存（真实数据）----
-  const holdingsCache = ref({}) // code -> { data, loading, error, updatedAt }
-  async function fetchHoldings(code) {
-    const slot = holdingsCache.value[code] || { data: [], loading: false, error: null, updatedAt: null }
-    holdingsCache.value[code] = { ...slot, loading: true }
-    try {
-      const data = await fetchFundHoldings(code)
-      holdingsCache.value[code] = { data, loading: false, error: null, updatedAt: Date.now() }
-    } catch (e) {
-      holdingsCache.value[code] = { data: slot.data || [], loading: false, error: e.message, updatedAt: slot.updatedAt }
-    }
+  async function fetchHoldings(rawCode, options = {}) {
+    const code = normalizeCode(rawCode)
+    if (!code) return null
+    if (!options.force && holdingsInFlight.has(code)) return holdingsInFlight.get(code)
+    const task = (async () => {
+      const prev = holdingsCache.value[code]
+      holdingsCache.value[code] = { ...(prev || makeUnavailable(null, dataSource())), loading: true, error: null }
+      try {
+        const rows = await fetchFundHoldings(code)
+        const data = Array.isArray(rows)
+          ? rows.filter((h) => h?.name && Number.isFinite(+h.weight) && +h.weight >= 0 && +h.weight <= 100)
+          : []
+        if (!data.length) throw new Error('no holdings data for ' + code)
+        holdingsCache.value[code] = makeDataState(data, {
+          source: dataSource(),
+          quality: DATA_QUALITY.EOD,
+          asOf: new Date().toISOString().slice(0, 10),
+        })
+      } catch (e) {
+        holdingsCache.value[code] = prev?.data?.length
+          ? { ...prev, loading: false, error: e.message, quality: DATA_QUALITY.CACHED }
+          : { ...makeUnavailable(e, dataSource()), data: [], loading: false }
+      }
+      return holdingsCache.value[code]
+    })()
+    holdingsInFlight.set(code, task)
+    try { return await task } finally { if (holdingsInFlight.get(code) === task) holdingsInFlight.delete(code) }
   }
   function getHoldings(code) {
     return holdingsCache.value[code]?.data || []
   }
+  function getHoldingsMeta(code) {
+    return holdingsCache.value[code] || null
+  }
 
-  // ---- 实时估值缓存（fundgz，QDII 无估值）----
-  const estimateCache = ref({}) // code -> { gsz, gszzl, gztime } | null
-  async function fetchEstimate(code) {
-    const d = await fetchFundEstimate(code)
-    if (d) {
-      estimateCache.value[code] = { gsz: +d.gsz, gszzl: +d.gszzl, gztime: d.gztime, name: d.name }
-    } else {
-      estimateCache.value[code] = null
-    }
+  // ---- 实时估值缓存（QDII 无估值）----
+  async function fetchEstimate(rawCode, options = {}) {
+    const code = normalizeCode(rawCode)
+    if (!code) return null
+    if (!options.force && estimateInFlight.has(code)) return estimateInFlight.get(code)
+    const task = (async () => {
+      try {
+        const d = await fetchFundEstimate(code)
+        if (d && Number.isFinite(+d.gsz) && +d.gsz > 0) {
+          const payload = { code, gsz: +d.gsz, gszzl: +d.gszzl || 0, gztime: d.gztime, name: d.name || '' }
+          estimateCache.value[code] = makeDataState(payload, {
+            source: estimateSource(),
+            quality: DATA_QUALITY.ESTIMATED,
+            asOf: d.gztime || '',
+          })
+        } else {
+          estimateCache.value[code] = makeUnavailable('估值暂不可用', estimateSource())
+        }
+      } catch (e) {
+        estimateCache.value[code] = makeUnavailable(e, estimateSource())
+      }
+      return estimateCache.value[code]
+    })()
+    estimateInFlight.set(code, task)
+    try { return await task } finally { if (estimateInFlight.get(code) === task) estimateInFlight.delete(code) }
   }
   function getEstimate(code) {
+    const state = estimateCache.value[code]
+    return state?.quality === DATA_QUALITY.UNAVAILABLE ? null : (state?.data || null)
+  }
+  function getEstimateMeta(code) {
     return estimateCache.value[code] || null
   }
 
   // ---- 基金档案缓存（真实信息）----
-  const profileCache = ref({}) // code -> { type, scale, manager, fee, ... }
-  async function fetchProfile(code) {
-    try {
-      const p = await fetchFundProfile(code)
-      if (p) profileCache.value[code] = p
-    } catch (e) {
-      // 静默降级用配置值
-    }
+  async function fetchProfile(rawCode, options = {}) {
+    const code = normalizeCode(rawCode)
+    if (!code) return null
+    if (!options.force && profileInFlight.has(code)) return profileInFlight.get(code)
+    const task = (async () => {
+      try {
+        const p = await fetchFundProfile(code)
+        if (p) {
+          profileCache.value[code] = makeDataState(p, {
+            source: dataSource(),
+            quality: DATA_QUALITY.EOD,
+            asOf: p.scaleDate || '',
+          })
+        } else {
+          profileCache.value[code] = makeUnavailable('档案暂不可用', dataSource())
+        }
+      } catch (e) {
+        profileCache.value[code] = makeUnavailable(e, dataSource())
+      }
+      return profileCache.value[code]
+    })()
+    profileInFlight.set(code, task)
+    try { return await task } finally { if (profileInFlight.get(code) === task) profileInFlight.delete(code) }
   }
   function getProfile(code) {
+    const state = profileCache.value[code]
+    return state?.quality === DATA_QUALITY.UNAVAILABLE ? null : (state?.data || null)
+  }
+  function getProfileMeta(code) {
     return profileCache.value[code] || null
   }
 
   // ---- 自选管理 ----
-  // 非核心基金的搜索元信息缓存（来自东财搜索接口）
-  const metaCache = ref(loadJSON('quant-fund-meta', {}))
-  function persistMeta() { saveJSON('quant-fund-meta', metaCache.value) }
-
   function isWatched(code) {
-    return watchlist.value.includes(code)
+    return watchlist.value.includes(normalizeCode(code))
   }
-  function addWatch(code, meta) {
+  function addWatch(rawCode, meta) {
+    const code = normalizeCode(rawCode)
+    if (!code) return null
     if (!watchlist.value.includes(code)) {
       watchlist.value.push(code)
       persistWL()
-      // 记录搜索元信息（供列表/详情显示名称类型）
-      if (meta) {
-        metaCache.value[code] = { ...meta }
-        persistMeta()
-      }
-      // 自动拉净值 + 估值 + 重仓股 + 档案
-      if (!byCode.value[code]?.navs?.length) fetchOne(code)
-      fetchEstimate(code)
-      fetchHoldings(code)
-      fetchProfile(code)
     }
+    if (meta) {
+      metaCache.value[code] = {
+        name: cleanText(meta.name || meta.short || meta.fullName || code, 80),
+        short: cleanText(meta.short || meta.name || code, 40),
+        fullName: cleanText(meta.fullName || meta.name || meta.short || code, 120),
+        type: cleanText(meta.type || '基金', 40),
+        theme: cleanText(meta.theme || meta.type || '基金', 40),
+      }
+      persistMeta()
+    }
+    return hydrateFund(code)
   }
   function getMeta(code) {
     return metaCache.value[code] || null
   }
-  function removeWatch(code) {
+  function removeWatch(rawCode) {
+    const code = normalizeCode(rawCode)
     watchlist.value = watchlist.value.filter((c) => c !== code)
     persistWL()
   }
@@ -170,11 +296,17 @@ export const useFundsStore = defineStore('funds', () => {
   function getPosition(code) {
     return positions.value[code] || null
   }
-  function setPosition(code, shares, costPrice) {
-    positions.value[code] = { shares: +shares || 0, costPrice: +costPrice || 0 }
+  function setPosition(rawCode, shares, costPrice) {
+    const code = normalizeCode(rawCode)
+    if (!code) return
+    positions.value[code] = {
+      shares: clampNumber(shares, 0, 1e12),
+      costPrice: clampNumber(costPrice, 0, 1e6),
+    }
     persistPos()
   }
-  function clearPosition(code) {
+  function clearPosition(rawCode) {
+    const code = normalizeCode(rawCode)
     delete positions.value[code]
     persistPos()
   }
@@ -185,7 +317,7 @@ export const useFundsStore = defineStore('funds', () => {
     const items = []
     for (const [code, pos] of Object.entries(positions.value)) {
       if (!pos.shares) continue
-      const nav = navResolver(code)
+      const nav = +navResolver(code) || 0
       const mv = pos.shares * nav
       const cv = pos.shares * pos.costPrice
       marketValue += mv
@@ -204,6 +336,10 @@ export const useFundsStore = defineStore('funds', () => {
     }
   }
 
+  function canUseForAlert(code) {
+    return isTradableQuality(byCode.value[code])
+  }
+
   return {
     byCode,
     loaded,
@@ -215,16 +351,21 @@ export const useFundsStore = defineStore('funds', () => {
     fetchOne,
     fetchAll,
     refresh,
+    hydrateFund,
     navSeries,
+    navMeta,
     holdingsCache,
     fetchHoldings,
     getHoldings,
+    getHoldingsMeta,
     estimateCache,
     fetchEstimate,
     getEstimate,
+    getEstimateMeta,
     profileCache,
     fetchProfile,
     getProfile,
+    getProfileMeta,
     isWatched,
     addWatch,
     removeWatch,
@@ -233,5 +374,6 @@ export const useFundsStore = defineStore('funds', () => {
     setPosition,
     clearPosition,
     portfolioSummary,
+    canUseForAlert,
   }
 })

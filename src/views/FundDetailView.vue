@@ -3,9 +3,10 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getFund, getNavSeries, getPESeries, computeSnapshot } from '@/mock/funds'
 import { fundCatalog } from '@/mock/fundCatalog'
-import { getFundHoldings, getFundSectorDist } from '@/mock/fundHoldings'
+import { getFundHoldings } from '@/mock/fundHoldings'
 import { buildSignals, backtestSignals } from '@/mock/indicators'
-import { fetchTencentQuotes } from '@/api/eastmoney'
+import { fetchTencentQuotes } from '@/api/dataClient'
+import { DATA_QUALITY, isReliableQuality, isTradableQuality, makeMock, qualityClass, qualityLabel } from '@/utils/dataQuality'
 import { useThemeStore } from '@/stores/theme'
 import { useFundsStore } from '@/stores/funds'
 import { useAlertsStore } from '@/stores/alerts'
@@ -45,10 +46,23 @@ function resolveMeta(code) {
 
 const fundMeta = computed(() => resolveMeta(route.params.code))
 
-// 优先真实净值，回退 mock
-const navs = computed(() => {
-  const real = fundsStore.navSeries(fundMeta.value.code)
-  return real.length ? real : getNavSeries(fundMeta.value.code)
+// 优先真实净值，回退 mock，并把质量状态显式传给页面
+const realNavs = computed(() => fundsStore.navSeries(fundMeta.value.code))
+const navDataMeta = computed(() => {
+  const realMeta = fundsStore.navMeta(fundMeta.value.code)
+  if (realNavs.value.length) return realMeta
+  const mock = getNavSeries(fundMeta.value.code)
+  return makeMock(mock, mock[mock.length - 1]?.date || '')
+})
+const navs = computed(() => realNavs.value.length ? realNavs.value : getNavSeries(fundMeta.value.code))
+const hasNavData = computed(() => navs.value.length >= 2)
+const hasReliableNavData = computed(() => realNavs.value.length >= 2 && isReliableQuality(navDataMeta.value))
+const isFallbackSnapshot = computed(() => navDataMeta.value?.quality === DATA_QUALITY.MOCK || navDataMeta.value?.isFallback)
+const canCreatePriceAlert = computed(() => sigReady.value && isTradableQuality(navDataMeta.value))
+const alertDisabledReason = computed(() => {
+  if (!sigReady.value) return '净值数据不足，暂不能创建价格提醒'
+  if (!canCreatePriceAlert.value) return '当前为历史快照/不可用数据，不能创建真实价格提醒'
+  return ''
 })
 const fund = computed(() => {
   const f = { ...fundMeta.value }
@@ -65,8 +79,8 @@ const EMPTY_SIG = {
   cross: { maCross: null, macdCross: null },
   signals: { score: 0, action: 'hold', actionLevel: 'normal', actionText: '数据计算中…', reasons: [], buyPoint: 0, sellPoint: 0, stopLoss: 0, takeProfit: 0, buyLevels: [], sellLevels: [], rewardRisk: 0, currentPrice: 0, downsideToBuy: 0, upsideToSell: 0 },
 }
-const sig = computed(() => (navs.value.length >= 2 ? buildSignals(fund.value, navs.value) : EMPTY_SIG))
-const sigReady = computed(() => navs.value.length >= 2) // 是否已计算真实信号
+const sig = computed(() => (hasNavData.value ? buildSignals(fund.value, navs.value) : EMPTY_SIG))
+const sigReady = computed(() => hasNavData.value) // 是否已计算信号
 
 const slot = computed(() => fundsStore.byCode[route.params.code])
 
@@ -138,6 +152,7 @@ async function fetchHoldingQuotes() {
 }
 // 实时估值
 const estimate = computed(() => fundsStore.getEstimate(route.params.code))
+const estimateMeta = computed(() => fundsStore.getEstimateMeta(route.params.code))
 // QDII 等：估值≈昨收净值（非真正盘中），标注区分
 const isQdiiEstimate = computed(() => {
   if (!estimate.value || !fund.value.nav) return false
@@ -176,15 +191,16 @@ watch(() => route.params.code, (c) => {
 watch(holdings, (h) => { if (h.length && !Object.keys(holdingQuotes.value).length) fetchHoldingQuotes() })
 
 async function refresh() {
-  await fundsStore.refresh(route.params.code, 252)
+  await fundsStore.hydrateFund(route.params.code, { force: true })
+  await fetchHoldingQuotes()
 }
 function toggleWatch() {
   fundsStore.toggleWatch(route.params.code)
 }
 
-// 把买卖点加入预警（4条：买入价/卖出价/止损/止盈）
+// 把观察价位加入价格提醒（仅可靠/可交易数据允许创建）
 function addToAlerts() {
-  if (alertAdded.value || !sig.value) return
+  if (alertAdded.value || !sig.value || !canCreatePriceAlert.value) return
   const code = route.params.code
   const name = fund.value.short || fund.value.name
   const pts = sig.value.signals
@@ -200,10 +216,10 @@ function addToAlerts() {
     channels: ['app'],
     source: 'fund-signal',
   })
-  alertsStore.addRule(mk('触及买入价', pts.buyPoint, '<='))
-  alertsStore.addRule(mk('触及卖出价', pts.sellPoint, '>='))
-  alertsStore.addRule(mk('跌破止损', pts.stopLoss, '<='))
-  alertsStore.addRule(mk('突破止盈', pts.takeProfit, '>='))
+  alertsStore.addRule(mk('触及低位参考', pts.buyPoint, '<='))
+  alertsStore.addRule(mk('触及高位参考', pts.sellPoint, '>='))
+  alertsStore.addRule(mk('跌破风险线', pts.stopLoss, '<='))
+  alertsStore.addRule(mk('突破观察线', pts.takeProfit, '>='))
   alertAdded.value = true
 }
 watch(() => route.params.code, () => { alertAdded.value = false })
@@ -400,9 +416,10 @@ const reasonsByTone = computed(() => {
     <div class="detail-bar">
       <button class="btn btn-ghost btn-sm back-btn" @click="router.push('/funds')">‹ 返回基金列表</button>
       <div class="detail-status">
-        <span v-if="slot?.loading" class="muted"><span class="spin-dot"></span> 加载真实净值…</span>
-        <span v-else-if="slot?.updatedAt" class="muted">✓ 真实数据 · {{ slot.updatedAt }}</span>
-        <span v-else-if="slot?.error" class="warn" :title="onlineReason">⚠ {{ isOnlineDemo ? '线上演示：数据源对境外IP限制，显示历史快照' : (slot.error + '，显示历史快照') }}</span>
+        <span v-if="slot?.loading" class="muted"><span class="spin-dot"></span> 加载净值…</span>
+        <span v-else class="muted" :class="qualityClass(navDataMeta)" :title="navDataMeta?.error || ''">
+          {{ qualityLabel(navDataMeta) }}<template v-if="navDataMeta?.asOf"> · 截至 {{ navDataMeta.asOf }}</template>
+        </span>
         <button class="btn btn-ghost btn-sm" :disabled="slot?.loading" @click="refresh">
           <span :class="{ spinning: slot?.loading }">↻</span> 刷新
         </button>
@@ -513,35 +530,43 @@ const reasonsByTone = computed(() => {
         <div class="sc-action">
           <span class="sc-icon">{{ actionTag[sig.signals.action].icon }}</span>
           <div>
-            <div class="sc-text" :class="sig.signals.action">{{ sig.signals.actionText }}</div>
+            <div class="sc-text" :class="sig.signals.action">
+              {{ sig.signals.actionText }}<span v-if="isFallbackSnapshot" class="sc-suffix">（样例）</span>
+            </div>
             <div class="sc-score dim">
               综合评分 {{ sig.signals.score > 0 ? '+' : '' }}{{ sig.signals.score }}
               · 盈亏比 {{ sig.signals.rewardRisk }}:1
             </div>
           </div>
-          <button class="sc-alert-btn" :class="{ added: alertAdded }" @click="addToAlerts">
-            {{ alertAdded ? '✓ 已加入预警' : '🔔 加入预警' }}
+          <button
+            class="sc-alert-btn"
+            :class="{ added: alertAdded }"
+            :disabled="!canCreatePriceAlert"
+            :title="alertDisabledReason"
+            @click="addToAlerts"
+          >
+            {{ alertAdded ? '✓ 已加入提醒' : (canCreatePriceAlert ? '🔔 加入价格提醒' : '🚫 数据不可用') }}
           </button>
         </div>
         <!-- 关键价位速览 -->
         <div class="sc-points">
           <div class="scp buy">
-            <div class="scp-l">买入参考</div>
+            <div class="scp-l">低位参考</div>
             <div class="scp-v num">{{ sig.signals.buyPoint }}</div>
             <div class="scp-g num">{{ (sig.signals.downsideToBuy * 100).toFixed(1) }}%</div>
           </div>
           <div class="scp sell">
-            <div class="scp-l">卖出参考</div>
+            <div class="scp-l">高位参考</div>
             <div class="scp-v num">{{ sig.signals.sellPoint }}</div>
             <div class="scp-g num">+{{ (sig.signals.upsideToSell * 100).toFixed(1) }}%</div>
           </div>
           <div class="scp stop">
-            <div class="scp-l">ATR止损</div>
+            <div class="scp-l">ATR 风险线</div>
             <div class="scp-v num down">{{ sig.signals.stopLoss }}</div>
             <div class="scp-g num">{{ ((sig.signals.stopLoss - sig.signals.currentPrice) / sig.signals.currentPrice * 100).toFixed(1) }}%</div>
           </div>
           <div class="scp target">
-            <div class="scp-l">ATR止盈</div>
+            <div class="scp-l">ATR 观察线</div>
             <div class="scp-v num up">{{ sig.signals.takeProfit }}</div>
             <div class="scp-g num">+{{ ((sig.signals.takeProfit - sig.signals.currentPrice) / sig.signals.currentPrice * 100).toFixed(1) }}%</div>
           </div>
@@ -549,37 +574,41 @@ const reasonsByTone = computed(() => {
       </div>
     </section>
 
-    <!-- 分批建仓计划 -->
+    <div v-if="isFallbackSnapshot" class="research-note panel">
+      当前净值/PE 来自历史快照或 mock，仅作样例观察，不构成投资建议；价格提醒功能在快照数据下不会触发。
+    </div>
+
+    <!-- 分批观察价位 -->
     <section v-if="sigReady" class="panel">
       <div class="panel-title">
-        <h3>🎯 分批建仓计划</h3>
+        <h3>🎯 分批观察价位</h3>
         <span class="sub">基于 ATR={{ sig.indicators.atr }} 动态计算 · 适配波动率</span>
       </div>
       <div class="ladder-grid">
-        <!-- 买入阶梯 -->
+        <!-- 低位观察阶梯 -->
         <div class="ladder-col">
-          <div class="ladder-head up">▲ 买入三档</div>
+          <div class="ladder-head up">▲ 低位观察三档</div>
           <div v-for="(lv, i) in sig.signals.buyLevels" :key="'b'+i" class="ladder-row buy">
             <span class="lr-label">{{ lv.label }}</span>
             <span class="lr-price num">{{ lv.price }}</span>
             <span class="lr-gap num">{{ ((lv.price - sig.signals.currentPrice) / sig.signals.currentPrice * 100).toFixed(1) }}%</span>
           </div>
           <div class="ladder-row buy stop">
-            <span class="lr-label">🛑 止损</span>
+            <span class="lr-label">🛑 风险线</span>
             <span class="lr-price num down">{{ sig.signals.stopLoss }}</span>
             <span class="lr-gap num">{{ ((sig.signals.stopLoss - sig.signals.currentPrice) / sig.signals.currentPrice * 100).toFixed(1) }}%</span>
           </div>
         </div>
-        <!-- 卖出阶梯 -->
+        <!-- 高位观察阶梯 -->
         <div class="ladder-col">
-          <div class="ladder-head down">▼ 卖出三档</div>
+          <div class="ladder-head down">▼ 高位观察三档</div>
           <div v-for="(lv, i) in sig.signals.sellLevels" :key="'s'+i" class="ladder-row sell">
             <span class="lr-label">{{ lv.label }}</span>
             <span class="lr-price num">{{ lv.price }}</span>
             <span class="lr-gap num">+{{ ((lv.price - sig.signals.currentPrice) / sig.signals.currentPrice * 100).toFixed(1) }}%</span>
           </div>
           <div class="ladder-row sell target">
-            <span class="lr-label">🎯 止盈</span>
+            <span class="lr-label">🎯 观察线</span>
             <span class="lr-price num up">{{ sig.signals.takeProfit }}</span>
             <span class="lr-gap num">+{{ ((sig.signals.takeProfit - sig.signals.currentPrice) / sig.signals.currentPrice * 100).toFixed(1) }}%</span>
           </div>
@@ -865,6 +894,13 @@ const reasonsByTone = computed(() => {
   &.sell { border-left-color: $down; background: linear-gradient(90deg, rgba(34,197,94,0.06), transparent 60%); }
   &.hold { border-left-color: $text-tertiary; }
 }
+.research-note {
+  padding: $space-3 $space-5;
+  font-size: 12px;
+  color: $text-secondary;
+  border-left: 3px solid $warning;
+}
+.sc-suffix { font-size: 12px; color: $text-tertiary; font-weight: 500; margin-left: $space-2; }
 .sc-main { display: flex; align-items: center; gap: $space-6; width: 100%; flex-wrap: wrap; }
 .sc-action { display: flex; align-items: center; gap: $space-3; flex-shrink: 0; }
 .sc-alert-btn {

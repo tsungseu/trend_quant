@@ -6,6 +6,7 @@ import { useMarketStore } from '@/stores/market'
 import { useThemeStore } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
 import { fmtMoney, fmtPct } from '@/mock/_helpers'
+import { dataModeLabel } from '@/config/runtime'
 
 const route = useRoute()
 const account = useAccountStore()
@@ -15,35 +16,31 @@ const alerts = useAlertsStore()
 
 const totalNotif = computed(() => alerts.unreadFundNotifs)
 
-const titleMap = {
-  '/': '资产总览',
-  '/market': '行情看盘',
-  '/strategies': '量化策略',
-  '/holdings': '我的持仓',
-  '/trades': '交易记录',
-  '/alerts': '预警中心',
-  '/advisor': 'AI 投顾',
-  '/backtest': '回测编辑器',
-  '/news': '资讯',
-  '/funds': '基金量化',
-}
-
-const pageTitle = computed(() => {
-  if (route.path.startsWith('/strategies/')) return '策略详情'
-  if (route.path.startsWith('/funds/')) return '基金详情'
-  return titleMap[route.path] || '趋势量化'
-})
+// 标题优先使用路由 meta.title，仅在没有 meta 时回退到根名称
+const pageTitle = computed(() => route.meta?.title || '趋势量化')
 
 const isDark = computed(() => theme.theme === 'dark')
 
 const totalAssets = computed(() => account.info.totalAssets)
+
+// 运行时日期 + 星期（中国习惯）
+const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const dateLabel = computed(() => {
+  const d = new Date()
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd} · ${WEEK[d.getDay()]}`
+})
+
+const modeLabel = computed(() => dataModeLabel())
 </script>
 
 <template>
   <header class="topbar">
     <div class="left">
       <h1 class="title">{{ pageTitle }}</h1>
-      <div class="date">2026-07-17 · 周五</div>
+      <div class="date">{{ dateLabel }} · {{ modeLabel }}</div>
     </div>
 
     <!-- 三大指数滚动 -->

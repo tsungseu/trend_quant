@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { makeRng, round, rand } from '@/mock/_helpers'
 import { useThemeStore } from '@/stores/theme'
 import { chartTheme, fmtPct, sign, fmtMoney } from '@/mock/_helpers'
@@ -51,6 +51,13 @@ const status = ref('idle') // idle | running | done
 const progress = ref(0)
 let runTimer = null
 
+function clearRunTimer() {
+  if (runTimer) {
+    clearInterval(runTimer)
+    runTimer = null
+  }
+}
+
 const result = ref(null)
 
 // ---- 运行回测（模拟计算）----
@@ -64,16 +71,20 @@ function runBacktest() {
   const days = periodOptions.find((p) => p.value === cfg.period)?.days || 252
 
   // 进度模拟
+  clearRunTimer()
   runTimer = setInterval(() => {
     progress.value += Math.random() * 18 + 8
     if (progress.value >= 100) {
       progress.value = 100
-      clearInterval(runTimer)
+      clearRunTimer()
       result.value = generateResult(cfg, days)
       status.value = 'done'
     }
   }, 180)
 }
+
+// 离开页面时清理 interval，避免内存泄漏与后台仍在跑
+onUnmounted(clearRunTimer)
 
 // 基于参数生成回测结果（参数影响结果，体现"编辑即生效"）
 function generateResult(cfg, days) {

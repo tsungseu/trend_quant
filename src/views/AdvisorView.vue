@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { sessions as initialSessions, quickPrompts, matchReply } from '@/mock/advisor'
 import MiniMarkdown from '@/components/MiniMarkdown.vue'
 
@@ -8,6 +8,14 @@ const activeSessionId = ref('s1')
 const input = ref('')
 const isStreaming = ref(false)
 const chatRef = ref(null)
+let streamTimer = null
+
+function clearStreamTimer() {
+  if (streamTimer) {
+    clearInterval(streamTimer)
+    streamTimer = null
+  }
+}
 
 // 消息列表
 const messages = ref([
@@ -50,12 +58,13 @@ async function send(text) {
   const chunks = full.match(/[\s\S]{1,4}/g) || [full]
   let idx = 0
   await new Promise((resolve) => {
-    const timer = setInterval(() => {
+    clearStreamTimer()
+    streamTimer = setInterval(() => {
       aiMsg.content += chunks[idx] || ''
       idx++
       scrollToBottom()
       if (idx >= chunks.length) {
-        clearInterval(timer)
+        clearStreamTimer()
         aiMsg.streaming = false
         isStreaming.value = false
         resolve()
@@ -68,7 +77,13 @@ function usePrompt(p) {
   send(p.text)
 }
 
-onMounted(() => scrollToBottom)
+onMounted(() => {
+  // 修正：原 `onMounted(() => scrollToBottom)` 仅把 scrollToBottom 当 effect 回调而非调用它，导致初始不滚动
+  scrollToBottom()
+})
+
+// 离开页面时清理流式 interval
+onUnmounted(clearStreamTimer)
 </script>
 
 <template>

@@ -5,14 +5,29 @@
 // 所有函数失败时抛错，由调用方兜底回退 mock
 // ============================================================
 
+const SCRIPT_HOST_ALLOWLIST = new Set([
+  'api.fund.eastmoney.com',
+  'fundsuggest.eastmoney.com',
+  'qt.gtimg.cn',
+  'stock.finance.sina.com.cn',
+])
+
+function assertAllowedScriptURL(url) {
+  const parsed = new URL(url, location.origin)
+  if (!SCRIPT_HOST_ALLOWLIST.has(parsed.hostname)) {
+    throw new Error('blocked script host: ' + parsed.hostname)
+  }
+}
+
 // ---- 通用 JSONP：用于直连（不经过 proxy）的接口 ----
 export function jsonp(url, timeout = 8000) {
   return new Promise((resolve, reject) => {
+    try { assertAllowedScriptURL(url) } catch (e) { reject(e); return }
     const cb = 'jp_' + Math.random().toString(36).slice(2)
     const script = document.createElement('script')
     let done = false
     const timer = setTimeout(() => {
-      if (!done) { cleanup(); reject(new Error('jsonp timeout')) }
+      if (!done) { done = true; cleanup(); reject(new Error('jsonp timeout')) }
     }, timeout)
     function cleanup() {
       clearTimeout(timer)
@@ -28,19 +43,25 @@ export function jsonp(url, timeout = 8000) {
       resolve(data)
     }
     script.onerror = () => {
-      if (!done) { cleanup(); reject(new Error('jsonp script error')) }
+      if (!done) { done = true; cleanup(); reject(new Error('jsonp script error')) }
     }
-    script.src = url.includes('{cb}') ? url.replace('{cb}', cb) : url + '&callback=' + cb
+    script.src = url.includes('{cb}') ? url.replace('{cb}', cb) : url + (url.includes('?') ? '&' : '?') + 'callback=' + cb
     document.head.appendChild(script)
   })
 }
 
 // ---- 通用 fetch（走 proxy，同源）----
 // 注意：不能在浏览器侧设置 Referer（禁止头），由 vite proxy 注入
-async function getJSON(url) {
-  const r = await fetch(url)
-  if (!r.ok) throw new Error('http ' + r.status)
-  return r.json()
+async function getJSON(url, timeout = 8000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  try {
+    const r = await fetch(url, { signal: controller.signal })
+    if (!r.ok) throw new Error('http ' + r.status)
+    return r.json()
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // ============================================================
@@ -49,6 +70,8 @@ async function getJSON(url) {
 
 /**
  * 拉取基金历史净值
+ * 注：东财 api.fund.eastmoney.com 校验 Referer，浏览器 JSONP 无法设置 Referer（禁止头），
+ * 因此 dev 模式走 vite proxy（/em-fund-api）注入正确 Referer，而非 JSONP 直连。
  * @param {string} code 基金代码
  * @param {number} days 需要的天数（净值条数）
  * @returns {Promise<{date,nav,changePct}[]>} 按日期升序
@@ -59,13 +82,13 @@ export async function fetchFundNav(code, days = 252) {
   let page = 1
   for (; page <= pagesNeeded; page++) {
     const url =
-      'https://api.fund.eastmoney.com/f10/lsjz?fundCode=' +
+      '/em-fund-api/f10/lsjz?fundCode=' +
       code +
       '&pageIndex=' + page +
-      '&pageSize=20&deviceType=ios&version=6.3.0&callback={cb}&_=' + Date.now()
+      '&pageSize=20&deviceType=ios&version=6.3.0&_=' + Date.now()
     let d
     try {
-      d = await jsonp(url)
+      d = await getJSON(url)
     } catch (e) {
       // 翻页中断：已有数据就返回，否则抛错
       if (collected.length) break
@@ -91,62 +114,80 @@ export async function fetchFundNav(code, days = 252) {
 }
 
 // ============================================================
-// 股票 / 指数 K线（push2his）— 走 proxy
+// 股票 / 指数 K线（腾讯 ifzq）— JSONP 直连，跨域稳定
+// 东财 push2his 对数据中心 IP 反爬严重（ECONNRESET），改用腾讯前复权日K
 // ============================================================
 
 /**
- * 拉取日K线
- * @param {string} secid 形如 "1.600519"（沪）/ "0.000858"（深）/ "1.000001"（上证指数）
+ * 拉取日K线（腾讯前复权）
+ * @param {string} secid 东财 secid "1.600519" / "0.000858"，内部转腾讯码
  * @param {number} days 近 N 天
  * @returns {Promise<{date,open,close,high,low,volume}[]>}
  */
 export async function fetchStockKline(secid, days = 180) {
-  const end = new Date()
-  const beg = new Date()
-  beg.setDate(beg.getDate() - days - 20)
-  const fmt = (dt) => dt.toISOString().slice(0, 10).replace(/-/g, '')
-  const url =
-    '/em-push2his/api/qt/stock/kline/get?secid=' + secid +
-    '&fields1=f1,f2,f3,f4,f5,f6' +
-    '&fields2=f51,f52,f53,f54,f55,f56,f57' +
-    '&klt=101&fqt=1&beg=' + fmt(beg) + '&end=' + fmt(end)
+  const tcode = secidToTencent(secid)
+  if (!tcode) throw new Error('invalid secid: ' + secid)
+  const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,${days + 20},qfq&_=${Date.now()}`
   const d = await getJSON(url)
-  const klines = d?.data?.klines || []
-  if (!klines.length) throw new Error('no kline for ' + secid)
-  // 格式 "date,open,close,high,low,vol,amount"
-  return klines.map((s) => {
-    const [date, open, close, high, low, vol] = s.split(',')
-    return {
-      date,
-      open: +open,
-      close: +close,
-      high: +high,
-      low: +low,
-      volume: +vol,
-    }
-  })
+  // 数据在 data[code].qfqday（前复权）或 day（不复权，兜底）
+  const block = d?.data?.[tcode] || {}
+  const rows = block.qfqday || block.day || []
+  if (!rows.length) throw new Error('no kline for ' + secid)
+  // 格式 [date, open, close, high, low, volume]；NaN 兜底避免污染图表
+  const out = []
+  for (const r of rows) {
+    const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0 }
+    out.push({ date: r[0], open: num(r[1]), close: num(r[2]), high: num(r[3]), low: num(r[4]), volume: num(r[5]) })
+  }
+  return out.slice(-days)
 }
 
 /**
- * 拉取分时（1分钟，当日）— 走 proxy
- * @param {string} secid
+ * 拉取分时（腾讯 minute/query）
+ * @param {string} secid 东财 secid
  * @returns {Promise<{ticks:[], prevClose}>}
  */
 export async function fetchIntraday(secid) {
-  const url =
-    '/em-push2his/api/qt/stock/trends2/get?secid=' + secid +
-    '&fields1=f1,f2,f3,f4,f5,f6,f7,f8' +
-    '&fields2=f51,f52,f53,f54,f55,f56,f57' +
-    '&iscr=0&ndays=1&klt=1'
+  const tcode = secidToTencent(secid)
+  if (!tcode) throw new Error('invalid secid: ' + secid)
+  const url = `https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tcode}&_=${Date.now()}`
   const d = await getJSON(url)
-  const data = d?.data
-  if (!data || !data.trends?.length) throw new Error('no intraday for ' + secid)
-  // 格式 "time,price,avg,vol,amount"（f51起）
-  const ticks = data.trends.map((s) => {
-    const [time, price, avg, vol] = s.split(',')
-    return { t: time.slice(11, 16), price: +price, avg: +avg, vol: +vol }
+  const block = d?.data?.[tcode]
+  const data = block?.data
+  if (!data || !data.data?.length) throw new Error('no intraday for ' + secid)
+  const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0 }
+  // 腾讯分时格式："0930 1299.00 382 49621800.00" -> 时间/价格/成交量(手)/成交额
+  // 注意：源数据无均价列，均价 = 累计成交额 / 累计成交量，需自行计算
+  let cumAmt = 0
+  let cumVol = 0
+  const ticks = data.data.map((s) => {
+    const parts = s.split(' ')
+    const price = num(parts[1])
+    const vol = num(parts[2])
+    const amount = num(parts[3])
+    cumVol += vol
+    cumAmt += amount
+    const avg = cumVol > 0 ? cumAmt / cumVol / 100 : price // 成交额单位元，成交量手(100股)
+    return { t: parts[0], price, avg, vol }
   })
-  return { ticks, prevClose: data.preClose }
+  // 昨收：腾讯分时接口无 preClose，从 qt 报价串第5位(index 4)取
+  const prevClose = num(block?.qt?.[tcode]?.[4]) || (ticks.length ? ticks[0].price : 0)
+  return { ticks, prevClose }
+}
+
+// 东财 secid -> 腾讯码（支持沪/深/北）
+function secidToTencent(secid) {
+  if (!secid) return ''
+  const [market, code] = secid.split('.')
+  if (!code) return ''
+  // 东财市场号：1=沪 0=深/北；腾讯前缀：sh/sz/bj
+  if (market === '1') return 'sh' + code
+  // 北交所代码前缀（830/430/920/87x）-> bj，其余 0. 开头 -> sz
+  if (market === '0') {
+    if (/^(83|43|87|92)/.test(code)) return 'bj' + code
+    return 'sz' + code
+  }
+  return ''
 }
 
 // ============================================================
@@ -185,9 +226,10 @@ export async function fetchQuote(secid) {
 // 通用 script-tag 加载（返回脚本执行后的副作用，不依赖回调）
 function loadScript(url, timeout = 8000) {
   return new Promise((resolve, reject) => {
+    try { assertAllowedScriptURL(url) } catch (e) { reject(e); return }
+    const script = document.createElement('script')
     const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')) }, timeout)
     function cleanup() { clearTimeout(timer); script.remove() }
-    const script = document.createElement('script')
     script.onerror = () => { cleanup(); reject(new Error('script error')) }
     script.onload = () => { cleanup(); resolve() }
     script.src = url
@@ -288,15 +330,16 @@ export async function fetchFundProfile(code) {
  */
 export function toTencentCode(code) {
   if (!code) return ''
-  const c = code.replace(/^[A-Za-z]+/, '')
-  // 美股（字母代码）
-  if (!/^\d+$/.test(c)) return 'us' + c.toUpperCase()
+  // 仅剥离已知市场字母前缀（SH/SZ/BJ/HK/US），保留纯字母代码（如 AAPL）
+  const c = String(code).replace(/^(SH|SZ|BJ|HK|US|sh|sz|bj|hk|us)/i, '')
+  // 美股（字母代码，剥前缀后仍非纯数字）
+  if (c && !/^\d+$/.test(c)) return 'us' + c.toUpperCase()
   // 指数
   if (c.startsWith('000001') || c.startsWith('000300') || c.startsWith('000016') || c.startsWith('000905')) return 'sh' + c
   if (c.startsWith('399')) return 'sz' + c
-  // A股：6/5 沪，其余深；8 北
+  // A股：6/5 沪，8/4 北，其余深
   if (c.startsWith('6') || c.startsWith('5')) return 'sh' + c
-  if (c.startsWith('8') || c.startsWith('4')) return 'bj' + c
+  if (c.startsWith('8') || c.startsWith('4') || c.startsWith('920')) return 'bj' + c
   if (c.startsWith('0') || c.startsWith('3')) return 'sz' + c
   // 港股5位
   if (c.length === 5) return 'hk' + c
@@ -341,46 +384,56 @@ export async function fetchTencentQuotes(codes) {
 // QDII 基金盘中无估值，会失败（正常，调用方降级）
 // ============================================================
 
+// 稳健剥 JSONP 壳：处理 /*<script>...</script>*/ 反劫持前缀、首尾注释、尾随分号/空白
+// 用 indexOf/lastIndexOf 定位第一个 ( 和最后一个 )，避免正则贪婪回溯失败
+function unwrapJSONP(text, cbName) {
+  if (!text) return null
+  // 去掉 /* ... */ 块注释前缀（新浪会返回 /*<script>...</script>*/）
+  const cleaned = text.replace(/^[\s\S]*?\*\/\s*/, '').trim()
+  // cb(...) 形式：取 cb 后第一个 ( 到末尾最后一个 )
+  const start = cleaned.indexOf('(')
+  const end = cleaned.lastIndexOf(')')
+  if (start < 0 || end <= start) return null
+  const body = cleaned.slice(start + 1, end).trim()
+  if (!body) return null
+  try {
+    return JSON.parse(body)
+  } catch {
+    return null
+  }
+}
+
 /**
  * 拉取基金实时估值（新浪）
+ * 注：新浪接口返回 JSONP 包裹 cb({...})，dev 走 proxy fetch 后需手动剥壳。
+ * gszzl 为百分数（如 1.23 表示 +1.23%），页面直接 + '%' 展示。
  * @param {string} code 基金代码
  * @returns {Promise<{code,gsz,gszzl,gztime,name}|null>}
  */
-export function fetchFundEstimate(code) {
-  return new Promise((resolve) => {
-    const cb = 'sinaEst_' + Math.random().toString(36).slice(2)
-    const timer = setTimeout(() => {
-      delete window[cb]
-      resolve(null)
-    }, 6000)
-    window[cb] = (data) => {
-      clearTimeout(timer)
-      delete window[cb]
-      const d = data?.result?.data
-      if (d && d.worth) {
-        // worth_date "20260723" -> "2026-07-23"
-        const wd = d.worth_date || ''
-        const gztime = wd.length === 8 ? `${wd.slice(0,4)}-${wd.slice(4,6)}-${wd.slice(6,8)}` : wd
-        resolve({
-          code,
-          gsz: +d.worth,
-          gszzl: +((d.worth_rate || 0) * 100).toFixed(2),
-          gztime,
-          name: d.desc?.text_base || '',
-        })
-      } else {
-        resolve(null)
-      }
+export async function fetchFundEstimate(code) {
+  const url = `/sina-fund/fundInfo/api/openapi.php/FdFundService.getEstimateNetworthPic?symbol=${code}&callback=cb&_=${Date.now()}`
+  let text
+  try {
+    const res = await fetch(url)
+    text = await res.text()
+  } catch {
+    return null
+  }
+  const data = unwrapJSONP(text, 'cb')
+  const d = data?.result?.data
+  if (d && d.worth) {
+    // worth_date "20260723" -> "2026-07-23"
+    const wd = d.worth_date || ''
+    const gztime = wd.length === 8 ? `${wd.slice(0,4)}-${wd.slice(4,6)}-${wd.slice(6,8)}` : wd
+    return {
+      code,
+      gsz: +d.worth,
+      gszzl: +((d.worth_rate || 0) * 100).toFixed(2),
+      gztime,
+      name: d.desc?.text_base || '',
     }
-    const s = document.createElement('script')
-    s.onerror = () => {
-      clearTimeout(timer)
-      delete window[cb]
-      resolve(null)
-    }
-    s.src = `https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/FdFundService.getEstimateNetworthPic?symbol=${code}&callback=${cb}`
-    document.head.appendChild(s)
-  })
+  }
+  return null
 }
 
 // ============================================================
@@ -389,50 +442,62 @@ export function fetchFundEstimate(code) {
 
 /**
  * 搜索基金（全市场，支持代码/简称/拼音/主题）
+ * 注：东财 fundsuggest 校验 Referer，dev 走 proxy fetch 后剥 JSONP 壳。
  * @param {string} keyword 关键词
  * @returns {Promise<{code,name,fullName,type,theme}[]>}
  */
 export async function searchFunds(keyword) {
   const k = (keyword || '').trim()
   if (!k) return []
-  const cb = 'fs_' + Math.random().toString(36).slice(2)
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => { delete window[cb]; resolve([]) }, 7000)
-    window[cb] = (data) => {
-      clearTimeout(timer)
-      delete window[cb]
-      const datas = data?.Datas || []
-      // 过滤：只保留基金（CATEGORY=700 或有 FTYPE），排除股票
-      const funds = datas
-        .filter((it) => (it.CODE || it.FCODE) && (it.FundBaseInfo?.FTYPE || it.CATEGORY === 700))
-        .map((it) => ({
-          code: it.CODE || it.FCODE,
-          name: it.SHORTNAME || it.NAME,
-          fullName: it.NAME,
-          type: it.FundBaseInfo?.FTYPE || '基金',
-          theme: it.FundBaseInfo?.FUNDTYPE || '',
-        }))
-      resolve(funds)
-    }
-    const s = document.createElement('script')
-    s.onerror = () => { clearTimeout(timer); delete window[cb]; resolve([]) }
-    s.src = 'https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=' + encodeURIComponent(k) + '&callback=' + cb
-    document.head.appendChild(s)
-  })
+  const url = '/em-fund-suggest/FundSearch/api/FundSearchAPI.ashx?m=1&key=' + encodeURIComponent(k) + '&callback=cb&_=' + Date.now()
+  let text
+  try {
+    const res = await fetch(url)
+    text = await res.text()
+  } catch {
+    return []
+  }
+  const data = unwrapJSONP(text, 'cb')
+  const datas = data?.Datas || []
+  // 过滤：只保留基金（CATEGORY=700 或有 FTYPE），排除股票
+  return datas
+    .filter((it) => /^\d{6}$/.test(it.CODE || it.FCODE || '') && (it.FundBaseInfo?.FTYPE || it.CATEGORY === 700 || it.NAME))
+    .map((it) => ({
+      code: it.CODE || it.FCODE,
+      name: it.SHORTNAME || it.NAME || it.FundName || '',
+      fullName: it.NAME || it.SHORTNAME || it.FundName || '',
+      type: it.FundBaseInfo?.FTYPE || it.FTYPE || it.FundType || '基金',
+      theme: it.FundBaseInfo?.FUNDTYPE || '',
+    }))
+    .filter((it) => /^\d{6}$/.test(it.code) && it.name)
 }
 
 // ---- secid 转换工具 ----
 // 输入支持：'SH600519'/'SZ000858'（带前缀）、'600519'（纯代码）、'1.600519'（已是 secid）
+// 注意：纯代码无法区分深市 000xxx 个股与沪市 000xxx 指数，必须依赖传入的市场前缀。
 export function toSecid(code) {
   if (!code) return ''
   // 已是 secid 格式
-  if (/^[01]\.\d+$/.test(code)) return code
-  // 剥离字母前缀（SH/SZ/HK 等），取纯数字代码
+  if (/^[0-9]+\.\d+$/.test(code)) return code
+  const upper = String(code).toUpperCase()
+  // 带市场前缀优先：SH/BJ -> 1.，SZ -> 0.（北交所东财市场号=0，但需特殊处理见下）
+  if (/^SH\d/.test(upper)) return '1.' + upper.replace(/^SH/, '')
+  if (/^SZ\d/.test(upper)) return '0.' + upper.replace(/^SZ/, '')
+  // 纯代码：用代码前缀推断市场
   const pure = code.replace(/^[A-Za-z]+/, '')
-  // 指数：000xxx 上证 1. / 399xxx 深证 0.
+  // 深证指数 399xxx
   if (pure.startsWith('399')) return '0.' + pure
-  if (pure.startsWith('000') || pure.startsWith('880')) return '1.' + pure
-  // 个股 / ETF：6/5/9 开头 沪市 1.，其余深市 0.
-  if (pure.startsWith('6') || pure.startsWith('5') || pure.startsWith('9')) return '1.' + pure
+  // 上证核心指数（仅这几个 000xxx 是沪市指数，其余 000xxx 都是深市主板个股如 000001平安银行/000002万科/000858五粮液）
+  const SH_INDEX_CODES = new Set(['000016', '000300', '000688', '000852', '000905', '950090'])
+  if (SH_INDEX_CODES.has(pure)) return '1.' + pure
+  // 同花顺概念板块 880xxx -> 90.（东财板块市场号）
+  if (pure.startsWith('880')) return '90.' + pure
+  // 个股 / ETF：6/5/9（非 920）开头 沪市 1.
+  if (pure.startsWith('6') || pure.startsWith('5') || pure.startsWith('9')) {
+    if (pure.startsWith('920')) return '0.' + pure // 北交所 920 段
+    return '1.' + pure
+  }
+  // 北交所：8/4 开头 -> 0.（东财北交所市场号为 0）
+  if (pure.startsWith('8') || pure.startsWith('4')) return '0.' + pure
   return '0.' + pure
 }

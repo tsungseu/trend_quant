@@ -73,6 +73,12 @@ const routes = [
     component: () => import('@/views/FundDetailView.vue'),
     meta: { title: '基金详情' },
   },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/NotFoundView.vue'),
+    meta: { title: '页面未找到' },
+  },
 ]
 
 const router = createRouter({

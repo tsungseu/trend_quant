@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch, nextTick } from 'vue'
-import { searchFunds } from '@/api/eastmoney'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { searchFunds } from '@/api/dataClient'
+import { canUseDirect, canUseProxy, dataModeLabel, isDemoMode } from '@/config/runtime'
 import { useFundsStore } from '@/stores/funds'
 
 const props = defineProps({
@@ -12,23 +13,47 @@ const store = useFundsStore()
 const keyword = ref('')
 const results = ref([])
 const searching = ref(false)
+const searchError = ref('')
 const inputRef = ref(null)
 let debounceTimer = null
 let lastSearchId = 0
 
-// 搜索：防抖 300ms，避免每次按键都请求
-function doSearch(kw) {
+const sourceUnavailable = computed(() => !canUseProxy() && !canUseDirect())
+const sourceHint = computed(() => {
+  if (isDemoMode()) return `${dataModeLabel()}：未启用真实基金搜索，添加自选请先切换到代理或本地直连模式。`
+  if (sourceUnavailable.value) return `${dataModeLabel()}：当前环境未允许第三方搜索数据源。`
+  return ''
+})
+
+function invalidateSearch() {
+  lastSearchId += 1
   clearTimeout(debounceTimer)
+}
+
+// 搜索：防抖 300ms，避免每次按键都请求；用 token 防止旧请求乱序覆盖
+function doSearch(kw) {
+  const searchId = ++lastSearchId
+  clearTimeout(debounceTimer)
+  searchError.value = ''
+  const k = (kw || '').trim()
+  if (!k) {
+    results.value = []
+    searching.value = false
+    return
+  }
+  searching.value = true
   debounceTimer = setTimeout(async () => {
-    const k = (kw || '').trim()
-    if (!k) { results.value = []; searching.value = false; return }
-    searching.value = true
-    const searchId = ++lastSearchId
-    const list = await searchFunds(k)
-    // 只采纳最后一次搜索结果（避免乱序覆盖）
-    if (searchId === lastSearchId) {
-      results.value = list.slice(0, 30)
-      searching.value = false
+    try {
+      const list = await searchFunds(k)
+      if (searchId !== lastSearchId || k !== keyword.value.trim()) return
+      results.value = Array.isArray(list) ? list.slice(0, 30) : []
+      if (!results.value.length && sourceHint.value) searchError.value = sourceHint.value
+    } catch (e) {
+      if (searchId !== lastSearchId) return
+      results.value = []
+      searchError.value = e?.message || '基金搜索暂不可用'
+    } finally {
+      if (searchId === lastSearchId) searching.value = false
     }
   }, 300)
 }
@@ -38,15 +63,19 @@ watch(keyword, doSearch)
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) {
-      keyword.value = ''
-      results.value = []
-      nextTick(() => inputRef.value?.focus())
-    }
+    invalidateSearch()
+    keyword.value = ''
+    results.value = []
+    searching.value = false
+    searchError.value = ''
+    if (open) nextTick(() => inputRef.value?.focus())
   }
 )
 
+onUnmounted(() => invalidateSearch())
+
 function close() {
+  invalidateSearch()
   emit('update:modelValue', false)
 }
 
@@ -85,8 +114,9 @@ function isAdded(code) {
             <input ref="inputRef" v-model="keyword" placeholder="输入基金代码 / 名称 / 主题，如 标普500、019305、半导体" />
           </div>
           <div class="dlg-body">
-            <div class="result-hint muted">
+            <div class="result-hint muted" :class="{ warn: searchError }">
               <span v-if="searching">搜索中…</span>
+              <span v-else-if="searchError">{{ searchError }}</span>
               <span v-else-if="keyword && results.length">搜索结果 {{ results.length }} 只</span>
               <span v-else-if="!keyword">输入基金代码 / 名称 / 拼音 / 主题搜索全市场基金</span>
             </div>
@@ -112,8 +142,8 @@ function isAdded(code) {
               </li>
               <li v-if="!results.length && keyword && !searching" class="empty">
                 <div class="empty-ico">🔍</div>
-                <div>未找到匹配的基金</div>
-                <div class="muted">试试输入代码或简称</div>
+                <div>{{ searchError ? '基金搜索暂不可用' : '未找到匹配的基金' }}</div>
+                <div class="muted">{{ searchError || '试试输入代码或简称' }}</div>
               </li>
             </ul>
           </div>
@@ -188,6 +218,7 @@ function isAdded(code) {
 .result-hint {
   font-size: 11px;
   padding: $space-2 $space-3;
+  &.warn { color: $warning; }
 }
 .result-list {
   display: flex;

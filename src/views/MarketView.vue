@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useMarketStore } from '@/stores/market'
 import { useThemeStore } from '@/stores/theme'
 import { getKlines, getIntraday } from '@/mock/market'
+import { DATA_QUALITY, DATA_SOURCE, makeMock, qualityClass, qualityLabel } from '@/utils/dataQuality'
 import { fmtMoney, fmtPct, sign, chartTheme } from '@/mock/_helpers'
 import EChart from '@/components/EChart.vue'
 
@@ -27,23 +28,37 @@ watch(chartTab, (t) => {
   if (t === 'intraday' && market.activeCode) market.fetchRealIntraday(market.activeCode)
 })
 
-// 真实数据优先，回退 mock
-const klines = computed(() => {
+// 真实数据优先，回退 mock；显式带上质量元信息
+const klinesState = computed(() => {
   const real = market.realKlines[market.activeCode]
-  return real?.klines?.length ? real.klines : getKlines(market.activeCode)
+  if (real?.klines?.length) return real
+  const mock = getKlines(market.activeCode)
+  return makeMock(mock, mock[mock.length - 1]?.date || '')
 })
-const intraday = computed(() => {
+const intradayState = computed(() => {
   const real = market.realIntraday[market.activeCode]
-  if (real?.ticks?.length) return { ticks: real.ticks, prevClose: real.prevClose }
-  return getIntraday(market.activeCode)
+  if (real?.ticks?.length) return { ...real, ticks: real.ticks, prevClose: real.prevClose }
+  const m = getIntraday(market.activeCode)
+  return makeMock(m, m.ticks?.[m.ticks.length - 1]?.t || '')
+})
+const klines = computed(() => klinesState.value.klines || klinesState.value.data || [])
+const intraday = computed(() => {
+  const t = intradayState.value.ticks || intradayState.value.data?.ticks || []
+  const p = intradayState.value.prevClose ?? intradayState.value.data?.prevClose ?? 0
+  return { ticks: t, prevClose: p }
 })
 const active = computed(() => market.activeStock)
-const usingRealKline = computed(
-  () => !!market.realKlines[market.activeCode]?.klines?.length
-)
-const usingRealIntraday = computed(
-  () => !!market.realIntraday[market.activeCode]?.ticks?.length
-)
+const activeState = computed(() => {
+  // 自选股列表项本身在 store 里带了 source/quality/isFallback
+  const s = market.stocks.find((x) => x.code === market.activeCode)
+  if (!s) return null
+  if (s.quality && s.source) return s
+  return makeMock(s, '')
+})
+const klineQualityCls = computed(() => qualityClass(klinesState.value))
+const klineQualityText = computed(() => qualityLabel(klinesState.value))
+const intradayQualityCls = computed(() => qualityClass(intradayState.value))
+const intradayQualityText = computed(() => qualityLabel(intradayState.value))
 
 // 计算 MA
 function calcMA(data, n) {
@@ -292,11 +307,16 @@ function toggleMA(n) {
             <button :class="{ active: chartTab === 'kline' }" @click="chartTab = 'kline'">日K</button>
             <button :class="{ active: chartTab === 'intraday' }" @click="chartTab = 'intraday'">分时</button>
           </div>
-          <button v-if="chartTab === 'kline'" class="ma-toggles seg">
+          <!-- 修复：原嵌套 button 不合法，改为 div 容器内的 button -->
+          <div v-if="chartTab === 'kline'" class="ma-toggles seg">
             <button v-for="n in [5, 10, 20]" :key="n" :class="{ active: maSet.includes(n) }" @click="toggleMA(n)">MA{{ n }}</button>
-          </button>
-          <span class="data-source-tag" :class="{ real: chartTab === 'kline' ? usingRealKline : usingRealIntraday }">
-            {{ (chartTab === 'kline' ? usingRealKline : usingRealIntraday) ? '✓ 实时数据' : '○ 模拟数据' }}
+          </div>
+          <span
+            class="data-source-tag"
+            :class="chartTab === 'kline' ? klineQualityCls : intradayQualityCls"
+            :title="qualityLabel(chartTab === 'kline' ? klinesState : intradayState)"
+          >
+            {{ chartTab === 'kline' ? klineQualityText : intradayQualityText }}
           </span>
         </div>
       </div>
@@ -326,7 +346,7 @@ function toggleMA(n) {
       <div class="panel">
         <div class="panel-title">
           <h3>五档盘口</h3>
-          <span class="sub">{{ active.name }}</span>
+          <span class="sub">{{ active.name }} · 模拟盘口</span>
         </div>
         <div class="book">
           <div v-for="(b, i) in 5" :key="'s'+i" class="book-row sell">
@@ -341,10 +361,250 @@ function toggleMA(n) {
             <span class="num muted">{{ Math.round(600 - i * 90) }}</span>
           </div>
         </div>
+        <div class="book-note muted">盘口量为模拟估算，仅供界面演示，不构成交易依据。</div>
       </div>
     </aside>
   </div>
 </template>
+
+<style lang="scss" scoped>
+@use '@/styles/tokens' as *;
+
+.market {
+  display: grid;
+  grid-template-columns: 280px 1fr 260px;
+  gap: $space-5;
+  height: 100%;
+}
+
+/* 自选列表 */
+.watchlist {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.wl-head,
+.wl-body li {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: $space-2;
+  padding: 0 $space-4;
+}
+.wl-head {
+  padding-top: $space-3;
+  padding-bottom: $space-2;
+  font-size: 11px;
+  color: $text-tertiary;
+  border-bottom: 1px solid $border-subtle;
+}
+.wl-body {
+  overflow-y: auto;
+  li {
+    padding: $space-3 $space-4;
+    align-items: center;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background $transition-fast;
+    &:hover {
+      background: $bg-panel-2;
+    }
+    &.active {
+      background: $brand-soft;
+      border-left-color: $brand;
+    }
+  }
+}
+.sym {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  .nm {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .cd {
+    font-size: 10px;
+    color: $text-tertiary;
+  }
+}
+.px {
+  font-size: 13px;
+  font-weight: 600;
+}
+.pct {
+  font-size: 12px;
+  text-align: right;
+}
+
+/* 主图表区 */
+.chart-area {
+  display: flex;
+  flex-direction: column;
+  gap: $space-5;
+  min-width: 0;
+}
+.stock-head {
+  padding: $space-4 $space-5;
+  display: flex;
+  align-items: center;
+  gap: $space-6;
+  flex-wrap: wrap;
+}
+.s-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.s-main h2 {
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  .tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: $bg-panel-2;
+    color: $text-tertiary;
+    font-weight: 400;
+    &.sector {
+      color: $brand;
+    }
+  }
+}
+.s-price {
+  font-size: 26px;
+  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: $space-3;
+  .chg {
+    font-size: 13px;
+    font-weight: 500;
+  }
+}
+.s-quotations {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: $space-2 $space-6;
+  margin-left: auto;
+  .q {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    span {
+      font-size: 11px;
+      color: $text-tertiary;
+    }
+    b {
+      font-size: 13px;
+      font-weight: 600;
+    }
+  }
+}
+.s-actions {
+  display: flex;
+  gap: $space-3;
+  align-items: center;
+}
+.data-source-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: $text-tertiary;
+  background: $bg-panel-2;
+  margin-left: $space-2;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  &.real { color: $success; background: rgba(34,197,94,0.1); }
+  &.warn { color: $warning; background: rgba(245,183,61,0.12); }
+  &.fallback { color: $text-tertiary; }
+}
+.chart-box {
+  padding: $space-4;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 右侧 */
+.side-right {
+  display: flex;
+  flex-direction: column;
+  gap: $space-5;
+}
+.sectors {
+  padding: $space-2;
+}
+.sector-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-3 $space-4;
+  border-radius: $radius-sm;
+  &:hover {
+    background: $bg-panel-2;
+  }
+  .sec-l {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    .sec-name {
+      font-size: 13px;
+    }
+    .sec-lead {
+      font-size: 10px;
+    }
+  }
+  span.num {
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
+.book {
+  padding: $space-3 $space-4;
+}
+.book-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 60px;
+  gap: $space-3;
+  padding: 5px 0;
+  font-size: 12px;
+  align-items: center;
+  &.buy span:nth-child(2) {
+    color: $up;
+  }
+  &.sell span:nth-child(2) {
+    color: $down;
+  }
+}
+.book-mid {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  padding: $space-3 0;
+  margin: $space-2 0;
+  border-top: 1px solid $border-subtle;
+  border-bottom: 1px solid $border-subtle;
+  font-family: 'JetBrains Mono', monospace;
+  &.up {
+    color: $up;
+  }
+  &.down {
+    color: $down;
+  }
+}
+.book-note {
+  padding: $space-2 $space-4 $space-3;
+  font-size: 10px;
+  line-height: 1.4;
+}
+</style>
+
 
 <style lang="scss" scoped>
 @use '@/styles/tokens' as *;

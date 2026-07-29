@@ -1,30 +1,50 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { alertRules as initialRules, alertHistory } from '@/mock/alerts'
+import { safeLoad, safeSave, normalizeAlertRules, createId, todayISO } from '@/utils/storage'
+import { DATA_QUALITY, isFresh, isTradableQuality } from '@/utils/dataQuality'
 
 const RULES_KEY = 'quant-alert-rules'
 const NOTIF_KEY = 'quant-alert-notifs'
-const load = (k, fb) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb } catch { return fb } }
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+const PRICE_TTL = 10 * 60 * 1000
+
+function normalizeNotifs(value) {
+  if (!Array.isArray(value)) return []
+  return value.slice(0, 50).filter((n) => n && typeof n === 'object').map((n) => ({
+    id: n.id || createId('fn'),
+    ruleId: n.ruleId || '',
+    code: n.code || n.symbol || '',
+    name: n.name || n.symbolName || '',
+    msg: n.msg || '',
+    time: n.time || '',
+    level: n.level === 'sell' ? 'sell' : 'buy',
+    ts: Number.isFinite(+n.ts) ? +n.ts : Date.now(),
+    read: !!n.read,
+  }))
+}
 
 export const useAlertsStore = defineStore('alerts', () => {
   // 合并：mock 初始规则 + localStorage 用户自建规则（去重）
-  const savedRules = load(RULES_KEY, [])
+  const savedRules = safeLoad(RULES_KEY, [], normalizeAlertRules)
   const savedCodes = new Set(savedRules.map((r) => r.id))
-  const baseRules = initialRules.filter((r) => !savedCodes.has(r.id))
-  const rules = ref([...savedRules, ...baseRules.map((r) => ({ ...r }))])
+  const baseRules = normalizeAlertRules(initialRules).filter((r) => !savedCodes.has(r.id))
+  const rules = ref([...savedRules, ...baseRules])
   const history = ref([...alertHistory])
-  const fundNotifs = ref(load(NOTIF_KEY, []))
+  const fundNotifs = ref(safeLoad(NOTIF_KEY, [], normalizeNotifs))
 
-  // 持久化
-  watch(rules, (v) => save(RULES_KEY, v), { deep: true })
-  watch(fundNotifs, (v) => save(NOTIF_KEY, v), { deep: true })
+  watch(rules, (v) => safeSave(RULES_KEY, normalizeAlertRules(v)), { deep: true })
+  watch(fundNotifs, (v) => safeSave(NOTIF_KEY, normalizeNotifs(v)), { deep: true })
 
   const activeCount = computed(() => rules.value.filter((r) => r.enabled).length)
-  const unreadCount = computed(() => fundNotifs.value.filter((n) => !n.read).length)
+  const unreadCount = computed(() => fundNotifs.value.filter((n) => !n.read).length + history.value.filter((h) => h.status === 'unread').length)
   const todayTriggered = computed(() => {
-    const today = '2026-07-21'
-    return history.value.filter((h) => h.time.startsWith(today)).length
+    const today = todayISO()
+    const hist = history.value.filter((h) => String(h.time || '').startsWith(today)).length
+    const live = fundNotifs.value.filter((n) => {
+      const d = new Date(n.ts || 0)
+      return Number.isFinite(d.getTime()) && todayISO(d) === today
+    }).length
+    return hist + live
   })
 
   function toggle(id) {
@@ -37,12 +57,25 @@ export const useAlertsStore = defineStore('alerts', () => {
   }
 
   function addRule(rule) {
-    rules.value.unshift({
-      id: 'a' + Date.now(),
+    const normalized = normalizeAlertRules([{
+      id: createId('a'),
       triggered: 0,
-      createdAt: '2026-07-21',
+      createdAt: todayISO(),
+      enabled: true,
+      channels: ['app'],
       ...rule,
-    })
+    }])[0]
+    if (!normalized) return null
+    const duplicate = rules.value.find((r) =>
+      r.symbol === normalized.symbol &&
+      r.type === normalized.type &&
+      r.op === normalized.op &&
+      r.target === normalized.target &&
+      r.source === normalized.source
+    )
+    if (duplicate) return duplicate
+    rules.value.unshift(normalized)
+    return normalized
   }
 
   function markAllRead() {
@@ -50,41 +83,54 @@ export const useAlertsStore = defineStore('alerts', () => {
     fundNotifs.value.forEach((n) => (n.read = true))
   }
 
-  // 检查基金买卖点预警（由 App.vue 周期调用，传入 {code, name, price}[]）
-  // 对 type=price 且 source=fund-signal 的规则，价格触及 target 时触发通知
+  // 检查基金价格提醒（由 App.vue 周期调用，传入 {code, name, price, meta}[]）
   function checkFundAlerts(fundPrices) {
-    if (!fundPrices?.length) return
+    if (!fundPrices?.length) return []
     const triggered = []
+    const now = Date.now()
     for (const r of rules.value) {
       if (!r.enabled || r.type !== 'price') continue
       const fp = fundPrices.find((f) => f.code === r.symbol)
-      if (!fp) continue
+      if (!fp || !Number.isFinite(+fp.price)) continue
+      const meta = fp.meta || { quality: fp.dataQuality, fetchedAt: fp.fetchedAt, asOf: fp.asOf }
+      r.lastCheckedAt = new Date(now).toISOString()
+      r.dataQuality = meta?.quality || ''
+      r.dataAsOf = meta?.asOf || ''
+      // 真实提醒只接受新鲜且非 mock/unavailable 的价格
+      if (!isTradableQuality(meta) || !isFresh(meta, PRICE_TTL) && meta?.quality !== DATA_QUALITY.EOD) continue
+
       const hit =
         (r.op === '>=' && fp.price >= r.target) ||
-        (r.op === '<=' && fp.price <= r.target)
-      if (hit) {
-        // 标记触发，生成通知（去重：同一规则5分钟内只通知一次）
-        const last = fundNotifs.value.find((n) => n.ruleId === r.id)
-        const now = Date.now()
-        if (last && now - last.ts < 5 * 60 * 1000) continue
-        r.triggered = (r.triggered || 0) + 1
-        r.current = fp.price
-        const isBuy = r.name.includes('买入') || r.name.includes('止损')
-        const notif = {
-          id: 'fn' + now,
-          ruleId: r.id,
-          code: r.symbol,
-          name: r.symbolName,
-          msg: `${r.symbolName} 现价 ${fp.price.toFixed(4)} ${r.op === '<=' ? '跌破' : '突破'} ${r.target}（${r.name}）`,
-          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-          level: isBuy ? 'buy' : 'sell',
-          ts: now,
-          read: false,
-        }
-        fundNotifs.value.unshift(notif)
-        triggered.push(notif)
-        if (fundNotifs.value.length > 50) fundNotifs.value = fundNotifs.value.slice(0, 50)
+        (r.op === '<=' && fp.price <= r.target) ||
+        (r.op === '>' && fp.price > r.target) ||
+        (r.op === '<' && fp.price < r.target)
+
+      if (!hit) {
+        r.lastHit = false
+        continue
       }
+      // 阈值状态机：持续命中不重复提醒，需先离开阈值再触发
+      if (r.lastHit) continue
+
+      r.lastHit = true
+      r.lastTriggeredAt = new Date(now).toISOString()
+      r.triggered = (r.triggered || 0) + 1
+      r.current = fp.price
+      const isLow = r.name.includes('低位') || r.name.includes('风险线') || r.op === '<='
+      const notif = {
+        id: createId('fn'),
+        ruleId: r.id,
+        code: r.symbol,
+        name: r.symbolName,
+        msg: `${r.symbolName} 价格 ${fp.price.toFixed(4)} ${r.op === '<=' || r.op === '<' ? '触及/跌破' : '触及/突破'} ${r.target}（${r.name}）`,
+        time: new Date(now).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        level: isLow ? 'buy' : 'sell',
+        ts: now,
+        read: false,
+      }
+      fundNotifs.value.unshift(notif)
+      triggered.push(notif)
+      if (fundNotifs.value.length > 50) fundNotifs.value = fundNotifs.value.slice(0, 50)
     }
     return triggered
   }

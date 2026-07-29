@@ -1,37 +1,63 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import { useMarketStore } from '@/stores/market'
 import { useFundsStore } from '@/stores/funds'
 import { useAlertsStore } from '@/stores/alerts'
+import { runtime } from '@/config/runtime'
 
 const market = useMarketStore()
 const funds = useFundsStore()
 const alerts = useAlertsStore()
 
 let alertTimer = null
+let alertChecking = false
 
-// 周期检查基金买卖点预警：用实时估值/净值 vs 规则价位
-function checkFundPriceAlerts() {
-  const prices = []
-  for (const code of funds.watchlist) {
-    // 优先实时估值，其次净值
-    const est = funds.getEstimate(code)
-    const nav = funds.byCode[code]?.navs
-    const price = est?.gsz || (nav?.length ? nav[nav.length - 1].nav : 0)
-    if (price) prices.push({ code, name: '', price })
+// 周期检查基金价格提醒：优先刷新估值，失败则回退到最新净值，并携带数据质量元信息
+async function checkFundPriceAlerts() {
+  if (alertChecking) return
+  alertChecking = true
+  try {
+    await Promise.allSettled(funds.watchlist.map((code) => funds.fetchEstimate(code, { force: true })))
+    const prices = []
+    for (const code of funds.watchlist) {
+      const estState = funds.estimateCache[code]
+      const est = funds.getEstimate(code)
+      const navState = funds.navMeta(code)
+      const navs = funds.byCode[code]?.navs || []
+      const nav = navs.length ? navs[navs.length - 1] : null
+      const price = Number(est?.gsz || nav?.nav || 0)
+      const meta = est?.gsz ? estState : navState
+      if (Number.isFinite(price) && price > 0) {
+        prices.push({
+          code,
+          name: funds.getMeta(code)?.name || funds.getMeta(code)?.short || '',
+          price,
+          meta,
+        })
+      }
+    }
+    if (prices.length) alerts.checkFundAlerts(prices)
+  } finally {
+    alertChecking = false
   }
-  if (prices.length) alerts.checkFundAlerts(prices)
 }
 
 onMounted(() => {
-  // 启动行情模拟实时刷新
-  market.startLive()
-  // 启动顶栏指数真实快照同步（东方财富，10s 一次）
+  if (runtime.enableMockLive) market.startLive()
   market.startIndexSync()
-  // 启动基金买卖点预警检查（30s 一次）
+  checkFundPriceAlerts()
   alertTimer = setInterval(checkFundPriceAlerts, 30000)
+})
+
+onUnmounted(() => {
+  if (alertTimer) {
+    clearInterval(alertTimer)
+    alertTimer = null
+  }
+  market.stopLive()
+  market.stopIndexSync()
 })
 </script>
 

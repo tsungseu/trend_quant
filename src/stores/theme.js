@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { safeGetItem, safeSetItem } from '@/utils/storage'
 
 // 主题 store：dark / light，持久化到 localStorage，应用到 <html data-theme>
 export const useThemeStore = defineStore('theme', () => {
   const STORAGE_KEY = 'quant-theme'
 
   const getInitial = () => {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = safeGetItem(STORAGE_KEY)
     if (saved === 'light' || saved === 'dark') return saved
     // 默认深色（交易类应用）
     return 'dark'
@@ -26,7 +27,7 @@ export const useThemeStore = defineStore('theme', () => {
   apply(theme.value)
   watch(theme, (t) => {
     apply(t)
-    localStorage.setItem(STORAGE_KEY, t)
+    safeSetItem(STORAGE_KEY, t)
   })
 
   const isDark = () => theme.value === 'dark'
