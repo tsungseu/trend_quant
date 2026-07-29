@@ -7,6 +7,7 @@ const props = defineProps({
   option: { type: Object, required: true },
   height: { type: String, default: '320px' },
   autoresize: { type: Boolean, default: true },
+  notMerge: { type: Boolean, default: false },
 })
 
 const theme = useThemeStore()
@@ -25,31 +26,36 @@ const themeColors = computed(() => {
   }
 })
 
-const merged = computed(() => ({
-  backgroundColor: 'transparent',
-  textStyle: {
-    color: themeColors.value.text,
-    fontFamily: "'JetBrains Mono','SF Mono',monospace",
-  },
-  grid: {
-    left: 12,
-    right: 16,
-    top: 28,
-    bottom: 12,
-    containLabel: true,
-  },
-  tooltip: {
-    backgroundColor: themeColors.value.tooltipBg,
-    borderColor: themeColors.value.axis,
-    borderWidth: 1,
-    textStyle: { color: themeColors.value.text, fontSize: 12 },
-    axisPointer: {
-      lineStyle: { color: themeColors.value.axis, type: 'dashed' },
-      label: { backgroundColor: readVar('--bg-elevated') || '#212c44' },
+// 含 calendar 坐标系（收益日历）的 option 不注入默认 grid/轴，避免与 calendar 冲突报错
+const isCalendar = computed(() => {
+  const s = props.option?.series
+  return Array.isArray(s) && s.some((it) => it && it.coordinateSystem === 'calendar')
+})
+
+const merged = computed(() => {
+  const base = isCalendar.value
+    ? { backgroundColor: 'transparent', textStyle: { color: themeColors.value.text, fontFamily: "'JetBrains Mono','SF Mono',monospace" } }
+    : {
+        backgroundColor: 'transparent',
+        textStyle: { color: themeColors.value.text, fontFamily: "'JetBrains Mono','SF Mono',monospace" },
+        grid: { left: 12, right: 16, top: 28, bottom: 12, containLabel: true },
+      }
+  const raw = {
+    ...base,
+    tooltip: {
+      backgroundColor: themeColors.value.tooltipBg,
+      borderColor: themeColors.value.axis,
+      borderWidth: 1,
+      textStyle: { color: themeColors.value.text, fontSize: 12 },
+      axisPointer: {
+        lineStyle: { color: themeColors.value.axis, type: 'dashed' },
+        label: { backgroundColor: readVar('--bg-elevated') || '#212c44' },
+      },
     },
-  },
-  ...props.option,
-}))
+    ...props.option,
+  }
+  return raw
+})
 </script>
 
 <template>
@@ -58,7 +64,7 @@ const merged = computed(() => ({
       class="chart"
       :option="merged"
       :autoresize="autoresize"
-      :update-options="{ notMerge: false }"
+      :update-options="{ notMerge: props.notMerge }"
       :style="{ height }"
     />
   </div>

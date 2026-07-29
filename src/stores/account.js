@@ -7,6 +7,8 @@ import {
   monthlyReturns,
   dailyReturns,
   todayBreakdown,
+  vsBenchmark,
+  periodProfits,
 } from '@/mock/account'
 
 export const useAccountStore = defineStore('account', () => {
@@ -40,6 +42,8 @@ export const useAccountStore = defineStore('account', () => {
     monthlyReturns,
     dailyReturns,
     todayBreakdown,
+    vsBenchmark,
+    periodProfits,
     setRange,
   }
 })

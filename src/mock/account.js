@@ -92,6 +92,45 @@ export const dailyReturns = (() => {
   return out
 })()
 
+// ---- 跟市场对比：本组合 vs 沪深300 vs 纳斯达克100（近1年，净值化）----
+export const vsBenchmark = (() => {
+  const r = makeRng(99)
+  const mine = equityCurves['1Y']
+  // 基准起点均 1.0：沪深300 年化约 +8% 波动小；纳斯达克100 年化约 +18% 波动大
+  let bv300 = 1.0
+  let bvNdx = 1.0
+  return mine.map((p, i) => {
+    if (i === 0) return { date: p.date, mine: 1.0, hs300: 1.0, ndx100: 1.0 }
+    const shock = (r() - 0.5) * 2
+    bv300 = bv300 * (1 + 0.0003 + 0.0095 * shock)
+    // 纳指100：更高漂移、更大波动，偶有急涨
+    const nshock = (r() - 0.47) * 2
+    bvNdx = bvNdx * (1 + 0.0007 + 0.014 * nshock)
+    return {
+      date: p.date,
+      mine: round(p.value / mine[0].value, 4),
+      hs300: round(bv300, 4),
+      ndx100: round(bvNdx, 4),
+    }
+  })
+})()
+
+// ---- 各时间维度收益金额（昨日/本周/本月/本年，用于顶部卡片与日历切换）----
+// 取自曲线区间收益，并按"展示金额"调整（让数字有感知度）
+export const periodProfits = (() => {
+  const calc = (key) => {
+    const c = equityCurves[key]
+    if (!c || c.length < 2) return 0
+    return round(c[c.length - 1].value - c[0].value, 2)
+  }
+  return {
+    day: calc('1D'),     // 昨日
+    week: calc('1W'),    // 本周
+    month: calc('1M'),   // 本月
+    year: calc('1Y'),    // 本年
+  }
+})()
+
 // ---- 当日收益明细（各品种贡献）----
 // 按资产配置比例 + 今日整体盈亏拆分到各品种，模拟真实持仓贡献
 export const todayBreakdown = (() => {
