@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useAccountStore } from '@/stores/account'
 import { useThemeStore } from '@/stores/theme'
 import { fmtMoney, fmtPct, sign, chartTheme } from '@/mock/_helpers'
@@ -170,6 +170,82 @@ const monthOption = computed(() => {
     ],
   }
 })
+
+// ---- 收益日历（每日收益热力，近1年）----
+// 以月份分列、按日历网格展示，颜色深浅表示当日盈亏方向与幅度
+const calView = ref('month') // month | year
+const calUnit = ref('pct')    // pct | abs
+
+// ECharts calendar 热力图配置
+const calendarOption = computed(() => {
+  const t = ct()
+  const data = account.dailyReturns.map((d) => {
+    const v = calUnit.value === 'pct' ? d.ret : d.profit
+    return [d.date, v]
+  })
+  const range = calView.value === 'year'
+    ? [account.dailyReturns[0]?.date, account.dailyReturns[account.dailyReturns.length - 1]?.date]
+    : (() => {
+        // 近一个月：取最后有数据的日期往前 30 天
+        const last = account.dailyReturns[account.dailyReturns.length - 1]?.date
+        const d = new Date(last)
+        d.setDate(d.getDate() - 30)
+        return [d.toISOString().slice(0, 10), last]
+      })()
+  return {
+    tooltip: {
+      formatter: (p) => {
+        const item = account.dailyReturns.find((x) => x.date === p.value[0])
+        if (!item) return p.value[0]
+        return `${p.value[0]}<br/>收益：<b class="${item.ret >= 0 ? 'up' : 'down'}">${calUnit.value === 'pct' ? fmtPct(item.ret) : (item.profit > 0 ? '+' : '') + '¥' + item.profit.toLocaleString()}</b>`
+      },
+    },
+    visualMap: {
+      min: calUnit.value === 'pct' ? -0.03 : -5000,
+      max: calUnit.value === 'pct' ? 0.03 : 5000,
+      show: false,
+      inRange: { color: ['#22c55e', t.split, '#ef4444'] },
+    },
+    calendar: {
+      range,
+      cellSize: ['auto', 16],
+      left: 40,
+      right: 20,
+      top: 50,
+      bottom: 30,
+      orient: 'horizontal',
+      splitLine: { show: false },
+      itemStyle: { color: t.split, borderColor: 'var(--bg-panel)', borderWidth: 2, borderRadius: 3 },
+      yearLabel: { show: false },
+      monthLabel: {
+        show: true,
+        color: t.tertiary,
+        fontSize: 11,
+        nameMap: 'ZH',
+        margin: 12,
+      },
+      dayLabel: {
+        show: true,
+        color: t.tertiary,
+        fontSize: 10,
+        firstDay: 1,
+        nameMap: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+      },
+    },
+    series: [
+      {
+        type: 'heatmap',
+        coordinateSystem: 'calendar',
+        data,
+        itemStyle: { borderRadius: 3 },
+      },
+    ],
+  }
+})
+
+// 当日收益明细
+const breakdown = computed(() => account.todayBreakdown)
+const breakdownTotal = computed(() => breakdown.value.reduce((s, b) => s + b.contribution, 0))
 </script>
 
 <template>
@@ -267,13 +343,51 @@ const monthOption = computed(() => {
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel cal-panel">
         <div class="panel-title">
-          <h3>月度收益</h3>
-          <span class="sub">近12个月</span>
+          <h3>收益日历</h3>
+          <div class="cal-controls">
+            <div class="seg cal-view-seg">
+              <button :class="{ active: calView === 'month' }" @click="calView = 'month'">月</button>
+              <button :class="{ active: calView === 'year' }" @click="calView = 'year'">年</button>
+            </div>
+            <div class="seg cal-unit-seg">
+              <button :class="{ active: calUnit === 'pct' }" @click="calUnit = 'pct'">%</button>
+              <button :class="{ active: calUnit === 'abs' }" @click="calUnit = 'abs'">¥</button>
+            </div>
+          </div>
         </div>
-        <div class="month-heat">
-          <EChart :option="monthOption" height="140px" />
+        <div class="cal-chart">
+          <EChart :option="calendarOption" :height="calView === 'year' ? '220px' : '180px'" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 当日收益明细 -->
+    <section class="panel">
+      <div class="panel-title">
+        <h3>当日收益明细</h3>
+        <span class="sub">{{ account.info.todayProfit >= 0 ? '+' : '' }}¥{{ account.info.todayProfit.toLocaleString() }} · {{ fmtPct(account.info.todayProfitPct) }}</span>
+      </div>
+      <div class="breakdown">
+        <div v-for="b in breakdown" :key="b.name" class="bd-row" :class="b.contribution >= 0 ? 'up' : 'down'">
+          <div class="bd-left">
+            <span class="bd-dot" :style="{ background: b.color }"></span>
+            <div class="bd-info">
+              <div class="bd-name">{{ b.name }}</div>
+              <div class="bd-sub num muted">市值 ¥{{ b.value.toLocaleString() }} · {{ fmtPct(b.trend) }}</div>
+            </div>
+          </div>
+          <div class="bd-right">
+            <div class="bd-contribution num">{{ b.contribution > 0 ? '+' : '' }}¥{{ b.contribution.toLocaleString() }}</div>
+            <div class="bd-pct num muted">{{ fmtPct(b.contributionPct) }}</div>
+          </div>
+        </div>
+        <div class="bd-total">
+          <span>合计</span>
+          <span class="num" :class="breakdownTotal >= 0 ? 'up' : 'down'">
+            {{ breakdownTotal > 0 ? '+' : '' }}¥{{ Math.round(breakdownTotal).toLocaleString() }}
+          </span>
         </div>
       </div>
     </section>
@@ -409,7 +523,95 @@ const monthOption = computed(() => {
   }
 }
 
-.month-heat {
-  padding: $space-4 $space-5;
+/* 收益日历 */
+.cal-panel {
+  display: flex;
+  flex-direction: column;
+}
+.cal-controls {
+  display: flex;
+  gap: $space-3;
+  align-items: center;
+}
+.cal-view-seg, .cal-unit-seg {
+  display: flex;
+  button {
+    padding: 3px 10px;
+    font-size: 11px;
+    &.active {
+      color: $brand;
+      background: $brand-soft;
+    }
+  }
+}
+.cal-chart {
+  padding: $space-2 $space-3;
+}
+
+/* 当日收益明细 */
+.breakdown {
+  padding: $space-3 $space-5 $space-2;
+}
+.bd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-3 0;
+  border-bottom: 1px solid $border-subtle;
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+.bd-left {
+  display: flex;
+  align-items: center;
+  gap: $space-3;
+  min-width: 0;
+}
+.bd-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.bd-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bd-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.bd-sub {
+  font-size: 11px;
+}
+.bd-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.bd-contribution {
+  font-size: 14px;
+  font-weight: 600;
+}
+.bd-pct {
+  font-size: 11px;
+}
+.bd-row.up .bd-contribution { color: $up; }
+.bd-row.down .bd-contribution { color: $down; }
+.bd-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-4 0 $space-2;
+  margin-top: $space-2;
+  border-top: 1px solid $border-default;
+  font-size: 14px;
+  font-weight: 600;
+  .num.up { color: $up; }
+  .num.down { color: $down; }
 }
 </style>

@@ -73,6 +73,49 @@ export const monthlyReturns = (() => {
   return months
 })()
 
+// ---- 每日收益序列（近 1 年，用于收益日历热力图）----
+// 基于 1Y 曲线相邻日差值派生，保证与收益走势一致；周末/节假日无数据
+export const dailyReturns = (() => {
+  const curve = equityCurves['1Y']
+  const out = []
+  for (let i = 1; i < curve.length; i++) {
+    const prev = curve[i - 1].value
+    const cur = curve[i].value
+    if (prev > 0) {
+      out.push({
+        date: curve[i].date,
+        ret: round((cur - prev) / prev, 4),
+        profit: round(cur - prev, 2),
+      })
+    }
+  }
+  return out
+})()
+
+// ---- 当日收益明细（各品种贡献）----
+// 按资产配置比例 + 今日整体盈亏拆分到各品种，模拟真实持仓贡献
+export const todayBreakdown = (() => {
+  const total = account.todayProfit
+  const totalAlloc = account.allocations.reduce((s, a) => s + a.value, 0)
+  const r = makeRng(88)
+  // 各品种按市值占比 + 随机扰动分摊今日盈亏
+  return account.allocations.map((a) => {
+    const baseRatio = a.value / totalAlloc
+    // 加权 ±40% 扰动，让贡献不完全按比例
+    const factor = 0.6 + r() * 0.8
+    const contribution = round(total * baseRatio * factor, 2)
+    const pct = round(contribution / a.value, 4)
+    return {
+      name: a.name,
+      color: a.color,
+      value: a.value,
+      contribution,
+      contributionPct: pct,
+      trend: round(rand(r, -0.015, 0.02), 4), // 该品种今日涨跌幅
+    }
+  }).sort((a, b) => b.contribution - a.contribution)
+})()
+
 // ---- 关键指标（卡片用）----
 export const keyMetrics = [
   { label: '累计收益率', value: '+28.64%', tone: 'up', sub: '近2年' },

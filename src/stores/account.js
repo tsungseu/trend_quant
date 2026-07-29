@@ -5,6 +5,8 @@ import {
   equityCurves,
   keyMetrics,
   monthlyReturns,
+  dailyReturns,
+  todayBreakdown,
 } from '@/mock/account'
 
 export const useAccountStore = defineStore('account', () => {
@@ -36,6 +38,8 @@ export const useAccountStore = defineStore('account', () => {
     rangeProfit,
     keyMetrics,
     monthlyReturns,
+    dailyReturns,
+    todayBreakdown,
     setRange,
   }
 })
