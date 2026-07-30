@@ -119,7 +119,7 @@ const typeText = { price: '价格', pct: '涨跌幅', metric: '指标', position
 
 export const alertHistory = Array.from({ length: 14 }, (_, i) => {
   const rule = pick(rng, alertRules)
-  const d = new Date('2026-07-21')
+  const d = new Date()
   d.setDate(d.getDate() - i)
   d.setHours(randInt(rng, 9, 15), randInt(rng, 0, 59))
   const isPct = rule.type === 'pct'

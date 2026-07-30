@@ -14,12 +14,22 @@ function escapeHtml(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// 仅允许 http/https（含相对协议 //）与 mailto，阻断 javascript:/data:/vbscript: 等
+function safeUrl(url) {
+  const u = String(url).trim()
+  if (/^(https?:|mailto:)/i.test(u)) return u
+  if (/^\/\//.test(u)) return u // 协议相对，安全
+  return '#'
 }
 
 function inline(s) {
   return s
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" />')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, url) => `<img alt="${alt}" src="${safeUrl(url)}" />`)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => `<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
 }

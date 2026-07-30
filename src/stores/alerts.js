@@ -7,6 +7,9 @@ import { DATA_QUALITY, isFresh, isTradableQuality } from '@/utils/dataQuality'
 const RULES_KEY = 'quant-alert-rules'
 const NOTIF_KEY = 'quant-alert-notifs'
 const PRICE_TTL = 10 * 60 * 1000
+// EOD 收盘价作为提醒依据时仅接受"最近一个交易日"以内（36 小时可覆盖周五收盘到周一），
+// 避免用多日前的旧收盘价触发真实价格提醒。
+const EOD_TTL = 36 * 60 * 60 * 1000
 
 function normalizeNotifs(value) {
   if (!Array.isArray(value)) return []
@@ -96,8 +99,11 @@ export const useAlertsStore = defineStore('alerts', () => {
       r.lastCheckedAt = new Date(now).toISOString()
       r.dataQuality = meta?.quality || ''
       r.dataAsOf = meta?.asOf || ''
-      // 真实提醒只接受新鲜且非 mock/unavailable 的价格
-      if (!isTradableQuality(meta) || !isFresh(meta, PRICE_TTL) && meta?.quality !== DATA_QUALITY.EOD) continue
+      // 真实提醒只接受新鲜且非 mock/unavailable 的价格。
+      // EOD 收盘价按 EOD_TTL 放宽（最近一个交易日），其余实时价用 PRICE_TTL，
+      // 绝不放过过期收盘价。
+      const ttl = meta?.quality === DATA_QUALITY.EOD ? EOD_TTL : PRICE_TTL
+      if (!isTradableQuality(meta) || !isFresh(meta, ttl)) continue
 
       const hit =
         (r.op === '>=' && fp.price >= r.target) ||
