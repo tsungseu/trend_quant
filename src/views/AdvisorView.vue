@@ -1,31 +1,55 @@
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { sessions as initialSessions, quickPrompts, matchReply } from '@/mock/advisor'
 import MiniMarkdown from '@/components/MiniMarkdown.vue'
+import { useLlmStore } from '@/stores/llm'
+import { streamChat } from '@/api/llm'
 
-const sessions = ref(initialSessions)
+const llmStore = useLlmStore()
+
+// 会话列表：从 mock 初始化，发送/新建时实时更新
+const sessions = ref(JSON.parse(JSON.stringify(initialSessions)))
 const activeSessionId = ref('s1')
 const input = ref('')
 const isStreaming = ref(false)
 const chatRef = ref(null)
 let streamTimer = null
+let abortCtrl = null
+// mock 流式 Promise 的 resolve；中断时主动 resolve，避免 await 永久挂起
+let mockStreamResolve = null
 
 function clearStreamTimer() {
   if (streamTimer) {
     clearInterval(streamTimer)
     streamTimer = null
   }
+  if (abortCtrl) {
+    abortCtrl.abort()
+    abortCtrl = null
+  }
+  // 主动结束挂起的 mock 流式 await，防止 Promise/闭包泄漏与 finally 不执行
+  if (mockStreamResolve) {
+    const resolve = mockStreamResolve
+    mockStreamResolve = null
+    resolve()
+  }
 }
 
-// 消息列表
-const messages = ref([
-  {
-    role: 'ai',
-    content:
-      '您好！我是您的 AI 投顾助手 🤖\n\n我可以帮您：\n- **诊断持仓** 健康度\n- **分析市场** 走势\n- **优化仓位** 配置\n- **推荐量化** 策略\n\n请问有什么可以帮您？',
-    time: '09:42',
-  },
-])
+// 当前会话消息（按会话 id 分桶持久化在内存中）
+const GREETING =
+  '您好！我是您的 AI 投顾助手 🤖\n\n我可以帮您：\n- **诊断持仓** 健康度\n- **分析市场** 走势\n- **优化仓位** 配置\n- **推荐量化** 策略\n\n请问有什么可以帮您？'
+
+const messagesBySession = ref({
+  s1: [
+    {
+      role: 'ai',
+      content: GREETING,
+      time: '09:42',
+    },
+  ],
+})
+
+const messages = computed(() => messagesBySession.value[activeSessionId.value] || [])
 
 function now() {
   const d = new Date()
@@ -38,44 +62,138 @@ function scrollToBottom() {
   })
 }
 
-// 发送消息 + 模拟流式回复
+// 更新左侧会话列表：标题取用户首条消息，最新会话置顶
+function updateSessionMeta(sid, userText) {
+  const list = sessions.value
+  let item = list.find((x) => x.id === sid)
+  if (!item) {
+    item = { id: sid, title: userText, preview: '', time: '刚刚', unread: 0 }
+    list.unshift(item)
+  } else {
+    item.title = userText
+    const idx = list.indexOf(item)
+    if (idx > 0) {
+      list.splice(idx, 1)
+      list.unshift(item)
+    }
+  }
+  item.preview = '对话进行中…'
+  item.time = now()
+}
+
+// 系统提示词：约束投顾为量化研究/价格提醒，不构成投资建议
+const SYSTEM_PROMPT =
+  '你是"趋势量化"的 AI 投顾助手。只做量化研究与价格提醒，输出以中文为主、结构化 Markdown。' +
+  '所有结论须声明"不构成投资建议"。可结合持仓、市场、风险、策略等主题回答。'
+
+// 真实 LLM 流式调用
+async function streamFromLlm(q, aiMsg) {
+  const provider = llmStore.activeProvider
+  if (!provider || !provider.baseUrl || !provider.model) {
+    throw new Error('未配置 LLM 供应商')
+  }
+  abortCtrl = new AbortController()
+  await streamChat(
+    { ...provider, model: provider.model || provider.models[0] },
+    [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: q },
+    ],
+    (t) => {
+      aiMsg.content += t
+      scrollToBottom()
+    },
+    { signal: abortCtrl.signal }
+  )
+}
+
+// 发送消息：配置完整则真实流式，否则回退模拟流式回复
 async function send(text) {
   const q = (text ?? input.value).trim()
   if (!q || isStreaming.value) return
 
-  messages.value.push({ role: 'user', content: q, time: now() })
+  const sid = activeSessionId.value || 's1'
+  if (!messagesBySession.value[sid]) messagesBySession.value[sid] = []
+  messagesBySession.value[sid].push({ role: 'user', content: q, time: now() })
   input.value = ''
   scrollToBottom()
 
   isStreaming.value = true
   // 添加一条空的 AI 消息，逐字填充
   const aiMsg = { role: 'ai', content: '', time: now(), streaming: true }
-  messages.value.push(aiMsg)
+  messagesBySession.value[sid].push(aiMsg)
   scrollToBottom()
 
-  const full = matchReply(q)
-  // 流式输出：按词块递增
-  const chunks = full.match(/[\s\S]{1,4}/g) || [full]
-  let idx = 0
-  await new Promise((resolve) => {
-    clearStreamTimer()
-    streamTimer = setInterval(() => {
-      aiMsg.content += chunks[idx] || ''
-      idx++
-      scrollToBottom()
-      if (idx >= chunks.length) {
+  // 更新会话列表（标题/预览/置顶）
+  updateSessionMeta(sid, q)
+
+  const useReal = llmStore.isConfigured
+  try {
+    if (useReal) {
+      await streamFromLlm(q, aiMsg)
+    } else {
+      const full = matchReply(q)
+      // 流式输出：按词块递增
+      const chunks = full.match(/[\s\S]{1,4}/g) || [full]
+      let idx = 0
+      await new Promise((resolve) => {
         clearStreamTimer()
-        aiMsg.streaming = false
-        isStreaming.value = false
-        resolve()
-      }
-    }, 12)
+        // 记录 resolve，供 clearStreamTimer（切换会话/卸载）主动结束本次 await
+        mockStreamResolve = resolve
+        streamTimer = setInterval(() => {
+          aiMsg.content += chunks[idx] || ''
+          idx++
+          scrollToBottom()
+          if (idx >= chunks.length) {
+            clearStreamTimer()
+          }
+        }, 12)
+      })
+    }
+  } catch (e) {
+    // 真实调用失败，回退到模拟回复（错误详情不暴露到 UI，避免泄露端点/密钥）
+    console.warn('[advisor] real llm failed, fallback to mock:', e?.message)
+    aiMsg.content =
+      '_（真实模型调用失败，已回退为模拟回复）_ ' + matchReply(q)
+  } finally {
+    aiMsg.streaming = false
+    isStreaming.value = false
+  }
+}
+
+// 新建对话：清空当前消息并重置为问候语；同时清理会话列表选择
+function newChat() {
+  clearStreamTimer()
+  isStreaming.value = false
+  const id = 's' + Date.now()
+  messagesBySession.value[id] = [
+    {
+      role: 'ai',
+      content: GREETING,
+      time: now(),
+    },
+  ]
+  sessions.value.unshift({
+    id,
+    title: '新对话',
+    preview: '开始与 AI 投顾对话…',
+    time: now(),
+    unread: 0,
   })
+  activeSessionId.value = id
+  input.value = ''
+  scrollToBottom()
 }
 
 function usePrompt(p) {
   send(p.text)
 }
+
+// 切换会话时若正在流式输出，先中断旧会话的流，避免串台/卡死输入
+watch(activeSessionId, () => {
+  clearStreamTimer()
+  isStreaming.value = false
+})
 
 onMounted(() => {
   // 修正：原 `onMounted(() => scrollToBottom)` 仅把 scrollToBottom 当 effect 回调而非调用它，导致初始不滚动
@@ -92,7 +210,7 @@ onUnmounted(clearStreamTimer)
     <aside class="panel sessions">
       <div class="panel-title">
         <h3>会话历史</h3>
-        <button class="new-chat">+ 新对话</button>
+        <button class="new-chat" @click="newChat()">+ 新对话</button>
       </div>
       <div class="session-list">
         <div

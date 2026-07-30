@@ -27,6 +27,7 @@ const themeColors = computed(() => {
 })
 
 // 含 calendar 坐标系（收益日历）的 option 不注入默认 grid/轴，避免与 calendar 冲突报错
+// 注：当前收益日历已改为纯 HTML 网格，此分支作为保险保留，不影响任何现有视图
 const isCalendar = computed(() => {
   const s = props.option?.series
   return Array.isArray(s) && s.some((it) => it && it.coordinateSystem === 'calendar')

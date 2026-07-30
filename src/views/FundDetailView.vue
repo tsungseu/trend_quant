@@ -145,7 +145,13 @@ async function fetchHoldingQuotes() {
   const codes = holdings.value.map((h) => h.code).filter(Boolean)
   if (!codes.length) return
   try {
-    holdingQuotes.value = await fetchTencentQuotes(codes)
+    const raw = (await fetchTencentQuotes(codes))?.data || {}
+    // proxy 网关把每个 code 包成 dataState；这里拍平为扁平 quote
+    const flat = {}
+    for (const [k, v] of Object.entries(raw)) {
+      flat[k] = v && typeof v === 'object' && 'data' in v && v.data ? v.data : v
+    }
+    holdingQuotes.value = flat
   } catch (e) {
     // 静默降级，用 holdings 里的 mock changePct
   }
@@ -927,7 +933,7 @@ const reasonsByTone = computed(() => {
 .scp.buy .scp-v, .scp.buy .scp-g { color: $up; }
 .scp.sell .scp-v, .scp.sell .scp-g { color: $down; }
 
-/* 分批建仓计划 */
+/* 分批观察价位 */
 .ladder-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

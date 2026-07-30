@@ -50,6 +50,12 @@ const routes = [
     meta: { title: 'AI 投顾' },
   },
   {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('@/views/SettingsView.vue'),
+    meta: { title: '设置' },
+  },
+  {
     path: '/backtest',
     name: 'backtest',
     component: () => import('@/views/BacktestView.vue'),

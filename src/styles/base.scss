@@ -21,7 +21,7 @@ body {
     sans-serif;
   background-color: $bg-app;
   color: $text-primary;
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-font-scale, 1));
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

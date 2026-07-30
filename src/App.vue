@@ -1,15 +1,24 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, watchEffect } from 'vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import { useMarketStore } from '@/stores/market'
 import { useFundsStore } from '@/stores/funds'
 import { useAlertsStore } from '@/stores/alerts'
+import { usePrefsStore } from '@/stores/prefs'
 import { runtime } from '@/config/runtime'
 
 const market = useMarketStore()
 const funds = useFundsStore()
 const alerts = useAlertsStore()
+const prefs = usePrefsStore()
+
+// 界面字号写入根节点 CSS 变量，供全局 rem/px 缩放（影响界面文字，不影响布局/图标）
+watchEffect(() => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.setProperty('--ui-font-scale', String(prefs.prefs.fontScale / 100))
+  }
+})
 
 let alertTimer = null
 let alertChecking = false

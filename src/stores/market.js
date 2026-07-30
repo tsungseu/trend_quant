@@ -56,11 +56,12 @@ export const useMarketStore = defineStore('market', () => {
       const prev = realKlines.value[code]
       realKlines.value[code] = { ...(prev || makeUnavailable(null, sourceForKline())), loading: true, error: null, klines: prev?.klines || [] }
       try {
-        const klines = await fetchStockKline(secid, days)
+        const klineState = await fetchStockKline(secid, days)
+        const klines = klineState?.data
         const clean = Array.isArray(klines)
           ? klines.filter((k) => k?.date && Number.isFinite(+k.close) && Number.isFinite(+k.open))
           : []
-        if (!clean.length) throw new Error('no kline for ' + code)
+        if (!clean.length) throw new Error(klineState?.error || ('no kline for ' + code))
         const state = makeDataState(clean, {
           source: sourceForKline(),
           quality: DATA_QUALITY.EOD,
@@ -106,9 +107,12 @@ export const useMarketStore = defineStore('market', () => {
     const task = (async () => {
       const prev = realIntraday.value[code]
       try {
-        const { ticks, prevClose } = await fetchIntraday(secid)
+        const intradayState = await fetchIntraday(secid)
+        const intraday = intradayState?.data || {}
+        const ticks = intraday.ticks
+        const prevClose = intraday.prevClose
         const clean = Array.isArray(ticks) ? ticks.filter((t) => t?.t && Number.isFinite(+t.price)) : []
-        if (!clean.length) throw new Error('no intraday for ' + code)
+        if (!clean.length) throw new Error(intradayState?.error || ('no intraday for ' + code))
         const state = makeDataState({ ticks: clean, prevClose }, {
           source: sourceForKline(),
           quality: DATA_QUALITY.DELAYED,
@@ -134,7 +138,14 @@ export const useMarketStore = defineStore('market', () => {
     if (indexFetching) return
     indexFetching = true
     try {
-      const quotes = await fetchTencentQuotes(indexCodes)
+      const quotesState = await fetchTencentQuotes(indexCodes)
+      const rawQuotes = quotesState?.data || {}
+      // proxy 网关把每个 code 包成 dataState；direct/eastmoney 返回扁平 quote。
+      // 这里统一拍平为 { code: quote } 形态。
+      const quotes = {}
+      for (const [k, v] of Object.entries(rawQuotes)) {
+        quotes[k] = v && typeof v === 'object' && 'data' in v && v.data ? v.data : v
+      }
       // 腾讯返回空对象（失败/限频）也算"请求已发出"，不再让指数停留在可跳动的 mock 状态
       const gotAny = quotes && Object.keys(quotes).length > 0
       for (const code of indexCodes) {

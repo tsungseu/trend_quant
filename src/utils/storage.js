@@ -133,6 +133,45 @@ export function createId(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+// ============================================================
+// LLM 供应商配置
+// ============================================================
+
+// API 格式白名单（对应 src/api/llm.js 适配层）
+export const LLM_FORMATS = ['anthropic', 'openai', 'responses']
+
+// 解析逗号/空白分隔的模型名列表，去空白、去空项、截断长度
+export function parseModelList(value, max = 50) {
+  const raw = Array.isArray(value) ? value.join(',') : String(value || '')
+  return raw
+    .split(/[\s,，、]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, max)
+}
+
+// LLM 供应商配置校验：仅接受结构正确的对象，密钥只保留（不在日志打印）
+export function normalizeLlmProviders(value) {
+  if (!Array.isArray(value)) return []
+  const out = []
+  const ids = new Set()
+  for (const p of value) {
+    if (!p || typeof p !== 'object') continue
+    const name = cleanText(p.name, 40)
+    const baseUrl = cleanText(p.baseUrl, 200)
+    const apiKey = cleanText(p.apiKey, 400)
+    const format = LLM_FORMATS.includes(p.format) ? p.format : 'openai'
+    const models = parseModelList(p.models).map((m) => cleanText(m, 80))
+    const model = cleanText(p.model || models[0] || '', 80)
+    if (!name || !baseUrl) continue
+    const id = cleanText(p.id, 80) || createId('llm')
+    const safeId = ids.has(id) ? createId('llm') : id
+    ids.add(safeId)
+    out.push({ id: safeId, name, baseUrl, apiKey, format, models, model })
+  }
+  return out
+}
+
 function normalizeChannels(value) {
   const input = Array.isArray(value) ? value : ['app']
   const allowed = new Set(['app', 'sms', 'email'])

@@ -1,48 +1,29 @@
 import { round } from './_helpers'
+import { ArrayManager } from '@/domain/ArrayManager'
 
 // ============================================================
 // 技术指标计算 + 买卖信号引擎
 // 纯前端计算，基于净值序列与基础信息
 // ============================================================
 
-// ---- 简单移动平均 ----
+// ---- 简单移动平均（基于 ArrayManager，保持对外签名：前 n-1 位为 null）----
 export function sma(values, n) {
-  const out = []
-  for (let i = 0; i < values.length; i++) {
-    if (i < n - 1) {
-      out.push(null)
-      continue
-    }
-    let sum = 0
-    for (let j = 0; j < n; j++) sum += values[i - j]
-    out.push(round(sum / n, 4))
-  }
-  return out
+  const am = new ArrayManager(Math.max(values.length, n + 1))
+  for (const v of values) am.updateBar({ open: v, high: v, low: v, close: v, volume: 0 })
+  const arr = am.sma(n, true)
+  // ArrayManager 的 sma array 模式在窗口未填满时返回 NaN，这里转 null 以兼容旧调用
+  return arr.map((v) => (v == null || Number.isNaN(v)) ? null : round(v, 4))
 }
 
-// ---- RSI（相对强弱指数，默认14）----
+// ---- RSI（相对强弱指数，默认14，基于 ArrayManager）----
 export function rsi(values, n = 14) {
-  const out = []
-  let avgGain = 0
-  let avgLoss = 0
-  for (let i = 0; i < values.length; i++) {
-    if (i === 0) {
-      out.push(50)
-      continue
-    }
-    const change = values[i] - values[i - 1]
-    const gain = change > 0 ? change : 0
-    const loss = change < 0 ? -change : 0
-    if (i <= n) {
-      avgGain = (avgGain * (i - 1) + gain) / i
-      avgLoss = (avgLoss * (i - 1) + loss) / i
-    } else {
-      avgGain = (avgGain * (n - 1) + gain) / n
-      avgLoss = (avgLoss * (n - 1) + loss) / n
-    }
-    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss
-    out.push(round(100 - 100 / (1 + rs), 2))
-  }
+  if (values.length < 2) return [50]
+  const am = new ArrayManager(values.length + 1)
+  for (const v of values) am.updateBar({ open: v, high: v, low: v, close: v, volume: 0 })
+  const r = am.rsi(n)
+  // 兼容旧签名：返回完整数组，首位置 50（与历史实现一致）
+  const out = new Array(values.length).fill(round(r, 2))
+  out[0] = 50
   return out
 }
 
@@ -139,21 +120,24 @@ export function atr(navs, period = 20) {
 }
 
 // ============================================================
-// 买卖信号引擎 v2 —— 多维量化打分 + ATR 动态点位 + 分批建仓
+// 买卖信号引擎 v2 —— 多维量化打分 + ATR 动态点位 + 分批观察价位
 // 维度：趋势(均线) + 动量(MACD) + 超买超卖(RSI) + 估值(PE分位) + 回撤修复
 // 点位：基于 ATR（适配各基金自身波动率），非固定百分比
 // ============================================================
 export function buildSignals(fund, navs) {
   const values = navs.map((n) => n.nav)
   const last = values[values.length - 1]
-  const ma5 = sma(values, 5)
-  const ma10 = sma(values, 10)
-  const ma20 = sma(values, 20)
-  const ma60 = sma(values, 60)
+  // 统一用 ArrayManager 计算所有时序指标（避免多处重复实现）
+  const am = new ArrayManager(values.length + 1)
+  for (const v of values) am.updateBar({ open: v, high: v, low: v, close: v, volume: 0 })
+  const ma5 = am.sma(5, true)
+  const ma10 = am.sma(10, true)
+  const ma20 = am.sma(20, true)
+  const ma60 = am.sma(60, true)
   const rsiArr = rsi(values, 14)
-  const boll = bollinger(values, 20)
+  const boll = am.bollinger(20, 2)
   const mdd = maxDrawdown(values)
-  const macdData = macd(values)
+  const macdData = am.macd(12, 26, 9)
   const atrVal = atr(navs, 14)
 
   const lastMA5 = ma5[ma5.length - 1]
@@ -315,7 +299,7 @@ export function buildSignals(fund, navs) {
   const sellLevels = [
     { label: '减仓(30%)', price: clamp(last + 4 * a, last, 0.15) },
     { label: '减仓(30%)', price: clamp(last + 6 * a, last, 0.15) },
-    { label: '清仓(40%)', price: clamp(Math.max(last + 9 * a, bollUpper), last, 0.15) },
+    { label: '高位风险观察(40%)', price: clamp(Math.max(last + 9 * a, bollUpper), last, 0.15) },
   ]
   // 止损：首仓价下方 5 倍日波动，封顶 -15%
   const stopLoss = clamp(buyLevels[0].price - 5 * a, last, 0.15)
@@ -355,7 +339,7 @@ export function buildSignals(fund, navs) {
       sellPoint,
       stopLoss,
       takeProfit,
-      // 分批建仓档位（新）
+      // 分批观察价位（新）
       buyLevels,
       sellLevels,
       rewardRisk: round(rewardRisk, 2),

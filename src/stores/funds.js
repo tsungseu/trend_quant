@@ -86,11 +86,12 @@ export const useFundsStore = defineStore('funds', () => {
       slot.loading = true
       slot.error = null
       try {
-        const navs = await fetchFundNav(code, days)
+        const navState = await fetchFundNav(code, days)
+        const navs = navState?.data
         const clean = Array.isArray(navs)
           ? navs.filter((n) => n?.date && Number.isFinite(+n.nav) && +n.nav > 0).map((n) => ({ ...n, nav: +n.nav }))
           : []
-        if (!clean.length) throw new Error('no nav data for ' + code)
+        if (!clean.length) throw new Error(navState?.error || ('no nav data for ' + code))
         if (requestSeq[code] !== seq) return slot
         const state = makeDataState(clean, {
           source: dataSource(),
@@ -162,11 +163,12 @@ export const useFundsStore = defineStore('funds', () => {
       const prev = holdingsCache.value[code]
       holdingsCache.value[code] = { ...(prev || makeUnavailable(null, dataSource())), loading: true, error: null }
       try {
-        const rows = await fetchFundHoldings(code)
+        const rowsState = await fetchFundHoldings(code)
+        const rows = rowsState?.data
         const data = Array.isArray(rows)
           ? rows.filter((h) => h?.name && Number.isFinite(+h.weight) && +h.weight >= 0 && +h.weight <= 100)
           : []
-        if (!data.length) throw new Error('no holdings data for ' + code)
+        if (!data.length) throw new Error(rowsState?.error || ('no holdings data for ' + code))
         holdingsCache.value[code] = makeDataState(data, {
           source: dataSource(),
           quality: DATA_QUALITY.EOD,
@@ -196,16 +198,22 @@ export const useFundsStore = defineStore('funds', () => {
     if (!options.force && estimateInFlight.has(code)) return estimateInFlight.get(code)
     const task = (async () => {
       try {
-        const d = await fetchFundEstimate(code)
-        if (d && Number.isFinite(+d.gsz) && +d.gsz > 0) {
-          const payload = { code, gsz: +d.gsz, gszzl: +d.gszzl || 0, gztime: d.gztime, name: d.name || '' }
+        const dState = await fetchFundEstimate(code)
+        const d = dState?.data
+        // 统一两种来源的字段：直连 eastmoney 用 gsz/gszzl/gztime；
+        // proxy 网关归一化为 nav/changePct/asOf。
+        const gsz = +d?.gsz || +d?.nav
+        const gszzl = +d?.gszzl || +d?.changePct
+        const gztime = d?.gztime || d?.asOf
+        if (d && Number.isFinite(gsz) && gsz > 0) {
+          const payload = { code, gsz, gszzl: gszzl || 0, gztime, name: d.name || '' }
           estimateCache.value[code] = makeDataState(payload, {
             source: estimateSource(),
             quality: DATA_QUALITY.ESTIMATED,
-            asOf: d.gztime || '',
+            asOf: gztime || '',
           })
         } else {
-          estimateCache.value[code] = makeUnavailable('估值暂不可用', estimateSource())
+          estimateCache.value[code] = makeUnavailable(dState?.error || '估值暂不可用', estimateSource())
         }
       } catch (e) {
         estimateCache.value[code] = makeUnavailable(e, estimateSource())
@@ -230,7 +238,8 @@ export const useFundsStore = defineStore('funds', () => {
     if (!options.force && profileInFlight.has(code)) return profileInFlight.get(code)
     const task = (async () => {
       try {
-        const p = await fetchFundProfile(code)
+        const pState = await fetchFundProfile(code)
+        const p = pState?.data
         if (p) {
           profileCache.value[code] = makeDataState(p, {
             source: dataSource(),
@@ -238,7 +247,7 @@ export const useFundsStore = defineStore('funds', () => {
             asOf: p.scaleDate || '',
           })
         } else {
-          profileCache.value[code] = makeUnavailable('档案暂不可用', dataSource())
+          profileCache.value[code] = makeUnavailable(pState?.error || '档案暂不可用', dataSource())
         }
       } catch (e) {
         profileCache.value[code] = makeUnavailable(e, dataSource())

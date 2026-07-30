@@ -63,9 +63,9 @@ const tools = [
     </nav>
 
     <div class="bottom">
-      <button class="nav-item" title="设置">
+      <RouterLink class="nav-item" :to="'/settings'" title="设置" :class="{ active: $route.path === '/settings' }">
         <span class="ico" v-html="icons.settings"></span>
-      </button>
+      </RouterLink>
       <button class="nav-item" title="帮助">
         <span class="ico" v-html="icons.help"></span>
       </button>
