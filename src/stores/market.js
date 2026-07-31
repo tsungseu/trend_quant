@@ -133,6 +133,65 @@ export const useMarketStore = defineStore('market', () => {
 
   // ---- 顶栏指数快照（腾讯行情批量）----
   const indexCodes = ['SH000001', 'SZ399006', 'SZ399001']
+  // 海外指数（用于资产总览顶部展示）
+  const overseasIndexCodes = ['usNDX', 'usINX', 'usIXIC', 'usDJI']
+  const overseasIndexMeta = {
+    usNDX: '纳斯达克100',
+    usINX: '标普500',
+    usIXIC: '纳斯达克',
+    usDJI: '道琼斯',
+  }
+  const overseasSnapshot = ref({})
+  let overseasFetching = false
+
+  async function fetchOverseasIndices() {
+    if (overseasFetching) return
+    overseasFetching = true
+    try {
+      const quotesState = await fetchTencentQuotes(overseasIndexCodes)
+      const rawQuotes = quotesState?.data || {}
+      const quotes = {}
+      for (const [k, v] of Object.entries(rawQuotes)) {
+        quotes[k] = v && typeof v === 'object' && 'data' in v && v.data ? v.data : v
+      }
+      const gotAny = Object.keys(quotes).length > 0
+      for (const code of overseasIndexCodes) {
+        const q = quotes[code]
+        if (q && q.price) {
+          const state = makeDataState(q, {
+            source: sourceForIndex(),
+            quality: DATA_QUALITY.DELAYED,
+            asOf: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+          })
+          // 仅取 state 的质量字段 + 报价字段，避免原始 q 上可能的 source/quality 字段污染
+          overseasSnapshot.value[code] = {
+            source: state.source,
+            quality: state.quality,
+            asOf: state.asOf,
+            name: overseasIndexMeta[code] || q.name || code,
+            price: q.price,
+            change: q.change,
+            changePct: q.changePct,
+            prevClose: q.prevClose,
+          }
+        } else if (gotAny) {
+          overseasSnapshot.value[code] = {
+            name: overseasIndexMeta[code] || code,
+            price: 0,
+            change: 0,
+            changePct: 0,
+            source: sourceForIndex(),
+            quality: DATA_QUALITY.UNAVAILABLE,
+            isFallback: true,
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[market] fetchOverseasIndices failed:', e?.message || e)
+    } finally {
+      overseasFetching = false
+    }
+  }
 
   async function fetchAllIndices() {
     if (indexFetching) return
@@ -184,7 +243,11 @@ export const useMarketStore = defineStore('market', () => {
   function startIndexSync() {
     if (indexTimer) return
     fetchAllIndices()
-    indexTimer = setInterval(fetchAllIndices, 60000)
+    fetchOverseasIndices()
+    indexTimer = setInterval(() => {
+      fetchAllIndices()
+      fetchOverseasIndices()
+    }, 60000)
   }
   function stopIndexSync() {
     if (indexTimer) {
@@ -248,10 +311,13 @@ export const useMarketStore = defineStore('market', () => {
     klineLoading,
     indexSnapshot,
     indexLoaded,
+    overseasSnapshot,
+    overseasIndexMeta,
     select,
     fetchKline,
     fetchRealIntraday,
     fetchAllIndices,
+    fetchOverseasIndices,
     startIndexSync,
     stopIndexSync,
     startLive,

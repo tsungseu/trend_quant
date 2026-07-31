@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAccountStore } from '@/stores/account'
 import { useMarketStore } from '@/stores/market'
@@ -22,6 +22,51 @@ const pageTitle = computed(() => route.meta?.title || '趋势量化')
 const isDark = computed(() => theme.theme === 'dark')
 
 const totalAssets = computed(() => account.info.totalAssets)
+const pickerOpen = ref(false)
+const pickerRef = ref(null)
+const STORAGE_KEY = 'topbar.overseas.indices'
+const overseasAllCodes = Object.keys(market.overseasIndexMeta || {})
+const selectedOverseasCodes = ref([])
+
+function loadSelections() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((x) => overseasAllCodes.includes(x)) : []
+  } catch {
+    return []
+  }
+}
+
+function saveSelections(codes) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(codes))
+}
+
+function togglePicker() {
+  pickerOpen.value = !pickerOpen.value
+}
+
+function toggleOverseasCode(code) {
+  const set = new Set(selectedOverseasCodes.value)
+  if (set.has(code)) set.delete(code)
+  else set.add(code)
+  selectedOverseasCodes.value = overseasAllCodes.filter((x) => set.has(x))
+  saveSelections(selectedOverseasCodes.value)
+  // 首次勾选某指数但快照尚未拉到时，触发一次补拉；已有时无需重复请求
+  const hasData = selectedOverseasCodes.value.every((c) => market.overseasSnapshot[c]?.price)
+  if (!hasData) market.fetchOverseasIndices()
+}
+
+const visibleOverseas = computed(() => selectedOverseasCodes.value
+  .map((code) => ({ code, ...(market.overseasSnapshot[code] || {}) }))
+  .filter((item) => Number(item.price) > 0)
+)
+
+function onDocClick(e) {
+  if (!pickerRef.value) return
+  if (!pickerRef.value.contains(e.target)) pickerOpen.value = false
+}
 
 // 运行时日期 + 星期（中国习惯）
 const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -34,6 +79,17 @@ const dateLabel = computed(() => {
 })
 
 const modeLabel = computed(() => dataModeLabel())
+
+onMounted(() => {
+  selectedOverseasCodes.value = loadSelections()
+  // 海外指数快照由 App.vue 的 startIndexSync() 统一拉取并 60s 轮询，
+  // 这里只负责按用户选择渲染，无需重复触发请求
+  document.addEventListener('click', onDocClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+})
 </script>
 
 <template>
@@ -57,6 +113,34 @@ const modeLabel = computed(() => dataModeLabel())
         <span class="num pct" :class="idx.changePct > 0 ? 'up' : 'down'">
           {{ fmtPct(idx.changePct) }}
         </span>
+      </div>
+
+      <div
+        v-for="ov in visibleOverseas"
+        :key="ov.code"
+        class="idx"
+      >
+        <span class="idx-name">{{ market.overseasIndexMeta[ov.code] || ov.name || ov.code }}</span>
+        <span class="num" :class="(ov.changePct ?? 0) > 0 ? 'up' : 'down'">{{
+          Number(ov.price).toLocaleString()
+        }}</span>
+        <span class="num pct" :class="(ov.changePct ?? 0) > 0 ? 'up' : 'down'">
+          {{ fmtPct(ov.changePct ?? 0) }}
+        </span>
+      </div>
+
+      <div ref="pickerRef" class="idx-picker">
+        <button class="add-btn" type="button" @click.stop="togglePicker">+ 添加指数</button>
+        <div v-if="pickerOpen" class="picker-pop" @click.stop>
+          <label v-for="code in overseasAllCodes" :key="code" class="picker-item">
+            <input
+              type="checkbox"
+              :checked="selectedOverseasCodes.includes(code)"
+              @change="toggleOverseasCode(code)"
+            />
+            <span>{{ market.overseasIndexMeta[code] }}</span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -139,6 +223,7 @@ const modeLabel = computed(() => dataModeLabel())
   gap: $space-6;
   margin-left: auto;
   margin-right: auto;
+  align-items: center;
 }
 .idx {
   display: flex;
@@ -157,6 +242,49 @@ const modeLabel = computed(() => dataModeLabel())
       font-weight: 500;
     }
   }
+}
+.idx-picker {
+  position: relative;
+}
+.add-btn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px dashed $border-default;
+  border-radius: 999px;
+  background: transparent;
+  color: $text-secondary;
+  font-size: 12px;
+  cursor: pointer;
+  &:hover {
+    border-color: $brand;
+    color: $text-primary;
+    background: $bg-panel-2;
+  }
+}
+.picker-pop {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  min-width: 150px;
+  padding: $space-2;
+  border: 1px solid $border-default;
+  border-radius: $radius-md;
+  background: $bg-elevated;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: $text-secondary;
+  padding: 4px 6px;
+  border-radius: 6px;
+  &:hover { background: $bg-panel-2; }
 }
 
 .right {

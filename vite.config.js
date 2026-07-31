@@ -98,6 +98,18 @@ export default defineConfig(({ mode }) => {
           },
           rewrite: (p) => p.replace(/^\/sina-fund/, ''),
         },
+        // Yahoo Finance：美股指数历史日K（东财 push2his 反爬拒连，Yahoo 仅服务端可达，浏览器经此代理）
+        '/yahoo-chart': {
+          target: 'https://query1.finance.yahoo.com',
+          changeOrigin: true,
+          secure: true,
+          agent: emAgent,
+          headers: {
+            'Connection': 'close',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          },
+          rewrite: (p) => p.replace(/^\/yahoo-chart/, ''),
+        },
       },
     }
   }
