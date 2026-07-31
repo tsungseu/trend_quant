@@ -1,5 +1,16 @@
-import { describe, it, expect } from 'vitest'
-import { toSecid, toTencentCode } from '@/api/eastmoney'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { toSecid, toTencentCode, fetchStockKline } from '@/api/eastmoney'
+
+const originalFetch = global.fetch
+
+beforeEach(() => {
+  global.fetch = vi.fn()
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  global.fetch = originalFetch
+})
 
 describe('toSecid - 市场判定', () => {
   it('已是 secid 格式直接返回', () => {
@@ -60,5 +71,35 @@ describe('toTencentCode - 腾讯码转换', () => {
     expect(toTencentCode('SH000001')).toBe('sh000001') // 指数
     expect(toTencentCode('SZ399006')).toBe('sz399006') // 深证指数
     expect(toTencentCode('830799')).toBe('bj830799') // 北交所
+  })
+  it('美股指数前缀 -> us 前缀', () => {
+    expect(toTencentCode('NDX')).toBe('usNDX')
+    expect(toTencentCode('INX')).toBe('usINX')
+    expect(toTencentCode('usIXIC')).toBe('usIXIC')
+    expect(toTencentCode('DJI')).toBe('usDJI')
+  })
+})
+
+describe('fetchStockKline - 美股指数分支', () => {
+  it('us 前缀走 Yahoo Finance，且规范化大小写、解析为日K', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        chart: {
+          result: [{
+            timestamp: [1753310400], // 2025-07-24 UTC
+            indicators: { quote: [{ open: [100], close: [101], high: [102], low: [99], volume: [123456] }] },
+          }],
+        },
+      }),
+    })
+
+    const result = await fetchStockKline('usndx', 1)
+    expect(Array.isArray(result)).toBe(true)
+    expect(result).toHaveLength(1)
+    expect(result[0].close).toBe(101)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const calledUrl = String(global.fetch.mock.calls[0][0])
+    expect(calledUrl).toContain('/yahoo-chart/v8/finance/chart/%5ENDX')
   })
 })

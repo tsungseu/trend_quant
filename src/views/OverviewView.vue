@@ -35,6 +35,8 @@ const equityOption = computed(() => {
   const baseVal = c[0].value
   const baseHs = hasBench ? benchByDate.get(c[0].date)?.hs300 : null
   const baseNdx = hasBench ? benchByDate.get(c[0].date)?.ndx100 : null
+  const hsSeriesName = '沪深300' + (account.benchmarkHasRealHs300 ? '·真实' : '·模拟')
+  const ndxSeriesName = '纳斯达克100' + (account.benchmarkHasRealNdx ? '·真实' : '·模拟')
   const dates = c.map((p) => p.date)
   const mine = c.map((p) => round((p.value / baseVal - 1) * 100, 2))
   const series = [{
@@ -49,7 +51,7 @@ const equityOption = computed(() => {
   }]
   if (hasBench) {
     series.push({
-      name: '沪深300' + (account.benchmarkHasRealHs300 ? '·真实' : '·模拟'),
+      name: hsSeriesName,
       type: 'line', smooth: true, symbol: 'none',
       data: c.map((p) => {
         const b = benchByDate.get(p.date)
@@ -59,7 +61,7 @@ const equityOption = computed(() => {
       connectNulls: true,
     })
     series.push({
-      name: '纳斯达克100·模拟', type: 'line', smooth: true, symbol: 'none',
+      name: ndxSeriesName, type: 'line', smooth: true, symbol: 'none',
       data: c.map((p) => {
         const b = benchByDate.get(p.date)
         return b && baseNdx ? round((b.ndx100 / baseNdx - 1) * 100, 2) : '-'
@@ -84,7 +86,7 @@ const equityOption = computed(() => {
       top: 0, right: 10,
       textStyle: { color: t.secondary, fontSize: 12 },
       icon: 'roundRect', itemWidth: 16, itemHeight: 3,
-      data: hasBench ? ['我的组合', '沪深300', '纳斯达克100'] : ['我的组合'],
+      data: hasBench ? ['我的组合', hsSeriesName, ndxSeriesName] : ['我的组合'],
     },
     grid: { left: 16, right: 24, top: 36, bottom: 24, containLabel: true },
     xAxis: {
@@ -138,7 +140,9 @@ const breakdown = computed(() => account.todayBreakdown)
 const breakdownTotal = computed(() => breakdown.value.reduce((s, b) => s + b.contribution, 0))
 
 // 挂载时加载真实沪深300 基准（失败自动降级为模拟并标注）
-onMounted(() => { account.loadBenchmark() })
+onMounted(() => {
+  account.loadBenchmark()
+})
 </script>
 
 <template>
@@ -201,7 +205,7 @@ onMounted(() => { account.loadBenchmark() })
       <div class="panel chart-panel">
         <div class="panel-title">
           <h3>收益走势</h3>
-          <span class="sub">vs 沪深300 · 纳斯达克100（{{ account.benchmarkHasRealHs300 ? '沪深300为真实行情' : '沪深300为模拟基准' }}，纳指100为模拟基准）</span>
+          <span class="sub">vs 沪深300 · 纳斯达克100（{{ account.benchmarkHasRealHs300 ? '沪深300为真实行情' : '沪深300为模拟基准' }}，纳指100为{{ account.benchmarkHasRealNdx ? '真实行情' : '模拟基准' }}）</span>
           <div class="range seg">
             <button
               v-for="r in ranges"
@@ -430,6 +434,7 @@ onMounted(() => { account.loadBenchmark() })
 .bd-pct { font-size: 11px; }
 .bd-row.up .bd-contribution { color: $up; }
 .bd-row.down .bd-contribution { color: $down; }
+
 .bd-total {
   display: flex;
   align-items: center;

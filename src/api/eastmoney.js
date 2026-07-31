@@ -120,13 +120,22 @@ export async function fetchFundNav(code, days = 252) {
 
 /**
  * 拉取日K线（腾讯前复权）
- * @param {string} secid 东财 secid "1.600519" / "0.000858"，内部转腾讯码
+ * @param {string} secid 东财 secid "1.600519" / "0.000858"，或腾讯码 "usNDX" / "hk00700"
  * @param {number} days 近 N 天
  * @returns {Promise<{date,open,close,high,low,volume}[]>}
  */
 export async function fetchStockKline(secid, days = 180) {
-  const tcode = secidToTencent(secid)
+  // 已经是腾讯码（us/hk 等字母前缀，不含 '.' ）则直接使用；否则从东财 secid 转换
+  const tcode = secid.includes('.') ? secidToTencent(secid) : secid
   if (!tcode) throw new Error('invalid secid: ' + secid)
+
+  // 美股指数（us 前缀）腾讯 ifzq 仅返回当日，改走东财 push2his（经 Vite 代理）
+  if (/^us/i.test(tcode)) {
+    // 规范化大小写：usndx -> usNDX，统一映射表键
+    const usCode = 'us' + tcode.slice(2).toUpperCase()
+    return fetchUsIndexKline(usCode, days)
+  }
+
   const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,${days + 20},qfq&_=${Date.now()}`
   const d = await getJSON(url)
   // 数据在 data[code].qfqday（前复权）或 day（不复权，兜底）
@@ -139,6 +148,48 @@ export async function fetchStockKline(secid, days = 180) {
     const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0 }
     out.push({ date: r[0], open: num(r[1]), close: num(r[2]), high: num(r[3]), low: num(r[4]), volume: num(r[5]) })
   }
+  return out.slice(-days)
+}
+
+// 美股指数日K：Yahoo Finance（query1.finance.yahoo.com），经 Vite 代理 /yahoo-chart。
+// 东财 push2his 对本环境直接拒连（server closed abruptly），腾讯 ifzq 对美股仅返回当日；
+// Yahoo 是美股历史日K唯一稳定免费源，但浏览器 CORS 受限，故经 Vite dev 代理转发。
+// proxy 模式不应走到这里（由 ProxyGateway.fetchKline 处理）；demo 模式不调用。
+const US_INDEX_YAHOO = {
+  usNDX: '%5ENDX',   // ^NDX 纳斯达克100
+  usINX: '%5EGSPC',  // ^GSPC 标普500
+  usIXIC: '%5EIXIC', // ^IXIC 纳斯达克综合
+  usDJI: '%5EDJI',   // ^DJI 道琼斯
+}
+async function fetchUsIndexKline(tcode, days = 180) {
+  const symbol = US_INDEX_YAHOO[tcode]
+  if (!symbol) throw new Error('unsupported us index: ' + tcode)
+  // range 略大于 days 以覆盖休市缺口；interval=1d 日K
+  const range = days <= 60 ? '3mo' : days <= 180 ? '1y' : '2y'
+  const url = `/yahoo-chart/v8/finance/chart/${symbol}?range=${range}&interval=1d`
+  const d = await getJSON(url)
+  const result = d?.chart?.result?.[0]
+  if (!result) throw new Error('no yahoo result for ' + tcode)
+  const ts = result.timestamp || []
+  const quote = result.indicators?.quote?.[0] || {}
+  const { open, close, high, low, volume } = quote
+  if (!ts.length || !close) throw new Error('empty yahoo kline for ' + tcode)
+  const out = []
+  for (let i = 0; i < ts.length; i++) {
+    const c = close[i]
+    if (c == null) continue // Yahoo 在休市/缺失日返回 null，跳过
+    const date = new Date(ts[i] * 1000).toISOString().slice(0, 10)
+    const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0 }
+    out.push({
+      date,
+      open: num(open?.[i]),
+      close: num(c),
+      high: num(high?.[i]),
+      low: num(low?.[i]),
+      volume: num(volume?.[i] || 0),
+    })
+  }
+  if (!out.length) throw new Error('no valid yahoo points for ' + tcode)
   return out.slice(-days)
 }
 
