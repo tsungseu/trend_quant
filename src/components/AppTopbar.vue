@@ -5,7 +5,7 @@ import { useAccountStore } from '@/stores/account'
 import { useMarketStore } from '@/stores/market'
 import { useThemeStore } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
-import { fmtMoney, fmtPct } from '@/mock/_helpers'
+import { fmtMoney, fmtPct, fmtThousands } from '@/mock/_helpers'
 import { dataModeLabel } from '@/config/runtime'
 
 const route = useRoute()
@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
       >
         <span class="idx-name">{{ idx.name }}</span>
         <span class="num" :class="idx.changePct > 0 ? 'up' : 'down'">{{
-          idx.price.toLocaleString()
+          fmtThousands(idx.price)
         }}</span>
         <span class="num pct" :class="idx.changePct > 0 ? 'up' : 'down'">
           {{ fmtPct(idx.changePct) }}
@@ -122,7 +122,7 @@ onBeforeUnmount(() => {
       >
         <span class="idx-name">{{ market.overseasIndexMeta[ov.code] || ov.name || ov.code }}</span>
         <span class="num" :class="(ov.changePct ?? 0) > 0 ? 'up' : 'down'">{{
-          Number(ov.price).toLocaleString()
+          fmtThousands(ov.price)
         }}</span>
         <span class="num pct" :class="(ov.changePct ?? 0) > 0 ? 'up' : 'down'">
           {{ fmtPct(ov.changePct ?? 0) }}
