@@ -2,7 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useAccountStore } from '@/stores/account'
 import { useThemeStore } from '@/stores/theme'
-import { fmtMoney, fmtPct, sign, round, chartTheme } from '@/mock/_helpers'
+import { fmtMoney, fmtSignedMoney, fmtPct, sign, round, chartTheme } from '@/mock/_helpers'
 import StatCard from '@/components/StatCard.vue'
 import EChart from '@/components/EChart.vue'
 
@@ -194,7 +194,7 @@ onMounted(() => {
       <div v-for="c in periodCards" :key="c.key" class="ps-card panel" :class="c.value >= 0 ? 'up' : 'down'">
         <div class="ps-label">{{ c.label }}</div>
         <div class="ps-value num">
-          {{ c.value > 0 ? '+' : '' }}{{ fmtMoney(Math.abs(c.value)).replace('¥', '¥ ') }}
+          {{ fmtSignedMoney(c.value).replace('¥', '¥ ') }}
         </div>
         <div class="ps-sub muted">{{ c.sub }}</div>
       </div>
@@ -255,7 +255,7 @@ onMounted(() => {
     <section class="panel">
       <div class="panel-title">
         <h3>当日收益明细</h3>
-        <span class="sub">{{ (info.todayProfit ?? 0) >= 0 ? '+' : '' }}{{ fmtMoney(Math.abs(info.todayProfit ?? 0)).replace('¥', '¥ ') }} · {{ fmtPct(info.todayProfitPct ?? 0) }}</span>
+        <span class="sub">{{ fmtSignedMoney(info.todayProfit ?? 0).replace('¥', '¥ ') }} · {{ fmtPct(info.todayProfitPct ?? 0) }}</span>
       </div>
       <div class="breakdown">
         <div v-for="b in breakdown" :key="b.name" class="bd-row" :class="b.contribution >= 0 ? 'up' : 'down'">
@@ -267,14 +267,14 @@ onMounted(() => {
             </div>
           </div>
           <div class="bd-right">
-            <div class="bd-contribution num">{{ b.contribution > 0 ? '+' : '' }}{{ fmtMoney(Math.abs(b.contribution)) }}</div>
+            <div class="bd-contribution num">{{ fmtSignedMoney(b.contribution) }}</div>
             <div class="bd-pct num muted">{{ fmtPct(b.contributionPct) }}</div>
           </div>
         </div>
         <div class="bd-total">
           <span>合计</span>
           <span class="num" :class="breakdownTotal >= 0 ? 'up' : 'down'">
-            {{ breakdownTotal > 0 ? '+' : '' }}{{ fmtMoney(Math.abs(Math.round(breakdownTotal))) }}
+            {{ fmtSignedMoney(breakdownTotal) }}
           </span>
         </div>
       </div>

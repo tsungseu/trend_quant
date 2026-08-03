@@ -31,19 +31,38 @@ export const round = (n, digits = 2) => {
 
 // 数字千分位格式化（非法输入返回 '0'，避免出现 "NaN"）
 // 接受数字或纯数字字符串（含小数）；非数字字符串回退为 '0'
+// 注意：只在整数部分插千分位，小数部分原样保留（避免 100.123456 → 100.123,456）
 export const fmtThousands = (n) => {
   if (typeof n === 'string') {
     if (!/^-?\d+(\.\d+)?$/.test(n)) return '0'
-    return n.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    return insertCommas(n)
   }
   const x = Number(n)
   if (!Number.isFinite(x)) return '0'
-  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return insertCommas(x.toString())
 }
 
-// 人民币金额格式化（带 ¥）
+// 只对整数部分插千分位：负号 + 整数部分插逗号 + 小数部分原样
+function insertCommas(s) {
+  const neg = s.startsWith('-') ? '-' : ''
+  const body = neg ? s.slice(1) : s
+  const [intPart, decPart] = body.split('.')
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return neg + withCommas + (decPart != null ? '.' + decPart : '')
+}
+
+// 人民币金额格式化（带 ¥，正数无符号）
 export const fmtMoney = (n, digits = 2) =>
   '¥' + fmtThousands(round(n, digits).toFixed(digits))
+
+// 带正负号的金额格式化（+¥12,345.67 / -¥12,345.67 / ¥0.00）
+// 用于收益展示：正数前缀 +，负数前缀 - 并保留负号，零无符号
+export const fmtSignedMoney = (n, digits = 2) => {
+  const r = round(n, digits)
+  if (r > 0) return '+' + fmtMoney(r, digits)
+  if (r < 0) return '-' + fmtMoney(Math.abs(r), digits)
+  return fmtMoney(r, digits)
+}
 
 // 百分比格式化：传入小数 (0.12 -> "+12.00%")；非法输入返回 "0.00%"
 export const fmtPct = (ratio, digits = 2) => {
