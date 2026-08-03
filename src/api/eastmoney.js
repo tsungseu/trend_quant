@@ -164,8 +164,8 @@ const US_INDEX_YAHOO = {
 async function fetchUsIndexKline(tcode, days = 180) {
   const symbol = US_INDEX_YAHOO[tcode]
   if (!symbol) throw new Error('unsupported us index: ' + tcode)
-  // range 略大于 days 以覆盖休市缺口；interval=1d 日K
-  const range = days <= 60 ? '3mo' : days <= 180 ? '1y' : '2y'
+  // range 略大于 days 以覆盖休市缺口；interval=1d 日K（3Y≈756 交易日需 5y）
+  const range = days <= 60 ? '3mo' : days <= 180 ? '1y' : days <= 400 ? '2y' : '5y'
   const url = `/yahoo-chart/v8/finance/chart/${symbol}?range=${range}&interval=1d`
   const d = await getJSON(url)
   const result = d?.chart?.result?.[0]

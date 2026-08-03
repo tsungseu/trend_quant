@@ -4,6 +4,7 @@ import { sessions as initialSessions, quickPrompts, matchReply } from '@/mock/ad
 import MiniMarkdown from '@/components/MiniMarkdown.vue'
 import { useLlmStore } from '@/stores/llm'
 import { streamChat } from '@/api/llm'
+import { createThinkStripper } from '@/utils/stripThink'
 
 const llmStore = useLlmStore()
 
@@ -138,8 +139,7 @@ async function streamFromLlm(q, aiMsg) {
     throw new Error('未配置 LLM 供应商（缺少 Base URL 或模型）')
   }
   abortCtrl = new AbortController()
-  inThink = false // 重置 think 过滤状态，避免上一轮残留
-  tailBuf = ''
+  const stripper = createThinkStripper()
   await streamChat(
     { ...provider, model, reasoningEffort: currentEffort.value },
     [
@@ -147,64 +147,11 @@ async function streamFromLlm(q, aiMsg) {
       { role: 'user', content: q },
     ],
     (t) => {
-      aiMsg.content += stripThink(t)
+      aiMsg.content += stripper.push(t)
       scrollToBottom()
     },
     { signal: abortCtrl.signal }
   )
-}
-
-// MiniMax / DeepSeek 等模型会在流中输出 <think>...</think> 思考过程，
-// 对终端用户无意义且破坏 Markdown 渲染，过滤掉。
-// 流式分段到达时 <think> 标签可能跨 chunk，用状态机 + 尾部缓冲处理。
-// - inThink: 当前是否在 <think> 块内
-// - tailBuf: 末尾可能是不完整标签的残余，缓冲到下一轮再判
-let inThink = false
-let tailBuf = ''
-function stripThink(text) {
-  let s = tailBuf + text
-  tailBuf = ''
-  let out = ''
-  let i = 0
-  const OPEN = '<think>'
-  const CLOSE = '</think>'
-  while (i < s.length) {
-    if (inThink) {
-      // 在 think 内，寻找闭合 </think>
-      const closeIdx = s.indexOf(CLOSE, i)
-      if (closeIdx >= 0) {
-        inThink = false
-        i = closeIdx + CLOSE.length
-      } else {
-        // 本 chunk 内未闭合，剩余全是思考内容。只有当剩余长度 < CLOSE 长度时，
-        // 才可能是被拆分的闭合标签前缀，缓冲到下轮；否则整段丢弃。
-        const remain = s.slice(i)
-        if (remain.length < CLOSE.length) tailBuf = remain
-        i = s.length
-      }
-    } else {
-      // 在正文，寻找 <think> 开头
-      const openIdx = s.indexOf(OPEN, i)
-      if (openIdx >= 0) {
-        out += s.slice(i, openIdx)
-        inThink = true
-        i = openIdx + OPEN.length
-      } else {
-        // 未找到开头。只有当末尾 < OPEN 长度且可能是不完整标签时才缓冲。
-        const remain = s.slice(i)
-        // 找最后一个 '<'，它可能是不完整 <think> 的开头
-        const lastLt = remain.lastIndexOf('<')
-        if (lastLt >= 0 && remain.length - lastLt < OPEN.length && OPEN.startsWith(remain.slice(lastLt))) {
-          out += remain.slice(0, lastLt)
-          tailBuf = remain.slice(lastLt)
-        } else {
-          out += remain
-        }
-        i = s.length
-      }
-    }
-  }
-  return out
 }
 
 // 发送消息：配置完整则真实流式，否则回退模拟流式回复
