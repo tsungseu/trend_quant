@@ -150,6 +150,25 @@ export function parseModelList(value, max = 50) {
     .slice(0, max)
 }
 
+// 归一化单个模型项为 { name, modelId, contextWindow }
+// 兼容三种输入：
+//   - 字符串 'glm-4-plus' -> { name: 'glm-4-plus', modelId: 'glm-4-plus', contextWindow: 0 }
+//   - 对象 { modelId: 'glm-4-plus' } -> name 回退 modelId
+//   - 对象 { name: 'GLM-5.2', modelId: 'glm-5.2', contextWindow: 1000000 }
+export function normalizeModelItem(m) {
+  if (typeof m === 'string') {
+    const id = cleanText(m, 80)
+    if (!id) return null
+    return { name: id, modelId: id, contextWindow: 0 }
+  }
+  if (!m || typeof m !== 'object') return null
+  const modelId = cleanText(m.modelId || m.id || m.name, 80)
+  if (!modelId) return null
+  const name = cleanText(m.name || modelId, 80)
+  const contextWindow = clampNumber(m.contextWindow || m.ctx || 0, 0, 100000000)
+  return { name, modelId, contextWindow }
+}
+
 // LLM 供应商配置校验：仅接受结构正确的对象，密钥只保留（不在日志打印）
 export function normalizeLlmProviders(value) {
   if (!Array.isArray(value)) return []
@@ -161,8 +180,13 @@ export function normalizeLlmProviders(value) {
     const baseUrl = cleanText(p.baseUrl, 200)
     const apiKey = cleanText(p.apiKey, 400)
     const format = LLM_FORMATS.includes(p.format) ? p.format : 'openai'
-    const models = parseModelList(p.models).map((m) => cleanText(m, 80))
-    const model = cleanText(p.model || models[0] || '', 80)
+    // models 兼容旧字符串数组与新对象数组
+    const rawModels = Array.isArray(p.models)
+      ? p.models
+      : (p.models != null ? parseModelList(p.models) : [])
+    const models = rawModels.map(normalizeModelItem).filter(Boolean)
+    // model 默认值：优先用旧字段（可能是字符串），回退首个模型的 modelId
+    const model = cleanText(p.model || models[0]?.modelId || '', 80)
     if (!name || !baseUrl) continue
     const id = cleanText(p.id, 80) || createId('llm')
     const safeId = ids.has(id) ? createId('llm') : id

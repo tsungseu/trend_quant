@@ -60,8 +60,30 @@ describe('normalizeLlmProviders', () => {
     const out = normalizeLlmProviders([
       { name: 'A', baseUrl: 'https://x', models: 'm1, m2 ,m3' },
     ])
-    expect(out[0].models).toEqual(['m1', 'm2', 'm3'])
+    // 模型项归一化为 { name, modelId, contextWindow }
+    expect(out[0].models).toEqual([
+      { name: 'm1', modelId: 'm1', contextWindow: 0 },
+      { name: 'm2', modelId: 'm2', contextWindow: 0 },
+      { name: 'm3', modelId: 'm3', contextWindow: 0 },
+    ])
     expect(out[0].model).toBe('m1')
+  })
+
+  it('兼容对象数组形式的 models，保留 name/modelId/contextWindow', () => {
+    const out = normalizeLlmProviders([
+      {
+        name: 'A', baseUrl: 'https://x',
+        models: [
+          { name: 'GLM-5.2', modelId: 'glm-5.2', contextWindow: 1000000 },
+          { modelId: 'glm-4-air' },
+        ],
+      },
+    ])
+    expect(out[0].models).toEqual([
+      { name: 'GLM-5.2', modelId: 'glm-5.2', contextWindow: 1000000 },
+      { name: 'glm-4-air', modelId: 'glm-4-air', contextWindow: 0 },
+    ])
+    expect(out[0].model).toBe('glm-5.2')
   })
 
   it('preserves apiKey and generates dedup ids', () => {

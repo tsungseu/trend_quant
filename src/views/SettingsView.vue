@@ -108,8 +108,10 @@ const form = reactive({
   baseUrl: '',
   apiKey: '',
   format: 'openai',
-  models: '',
-  model: '',
+  modelList: [],   // [{ name, modelId, contextWindow }] 模型对象数组
+  model: '',       // 默认模型 modelId
+  newModel: '',    // 添加模型输入框
+  editingModel: -1, // 正在编辑详情的模型索引（-1=无）
 })
 function resetForm() {
   editingId.value = 'closed'
@@ -117,8 +119,10 @@ function resetForm() {
   form.baseUrl = ''
   form.apiKey = ''
   form.format = 'openai'
-  form.models = ''
+  form.modelList = []
   form.model = ''
+  form.newModel = ''
+  form.editingModel = -1
 }
 // 打开"新增供应商"表单（与编辑区分，避免与 resetForm 互相抵消导致表单打不开）
 function openAdd() {
@@ -127,8 +131,10 @@ function openAdd() {
   form.baseUrl = ''
   form.apiKey = ''
   form.format = 'openai'
-  form.models = ''
+  form.modelList = []
   form.model = ''
+  form.newModel = ''
+  form.editingModel = -1
 }
 function startEdit(p) {
   editingId.value = p.id
@@ -136,8 +142,39 @@ function startEdit(p) {
   form.baseUrl = p.baseUrl
   form.apiKey = p.apiKey || ''
   form.format = p.format
-  form.models = (p.models || []).join(', ')
-  form.model = p.model || ''
+  form.modelList = (p.models || []).map((m) => ({
+    name: m.name || m.modelId,
+    modelId: m.modelId,
+    contextWindow: m.contextWindow || 0,
+  }))
+  form.model = p.model || form.modelList[0]?.modelId || ''
+  form.newModel = ''
+  form.editingModel = -1
+}
+// 添加模型：支持逗号批量输入，去重（按 modelId）
+function addModel() {
+  const names = form.newModel.split(/[\s,，、]+/).map((s) => s.trim()).filter(Boolean)
+  for (const n of names) {
+    if (!form.modelList.some((m) => m.modelId === n)) {
+      form.modelList.push({ name: n, modelId: n, contextWindow: 0 })
+    }
+  }
+  form.newModel = ''
+}
+// 删除模型：同步清理默认模型（若被删的是默认模型，回退首个）
+function removeModel(idx) {
+  const removed = form.modelList[idx]
+  form.modelList.splice(idx, 1)
+  if (removed && form.model === removed.modelId) form.model = form.modelList[0]?.modelId || ''
+  if (form.editingModel === idx) form.editingModel = -1
+  else if (form.editingModel > idx) form.editingModel--
+}
+function setDefaultModel(modelId) {
+  form.model = modelId
+}
+// 切换模型详情编辑面板
+function toggleEditModel(idx) {
+  form.editingModel = form.editingModel === idx ? -1 : idx
 }
 async function saveProvider() {
   const payload = {
@@ -145,8 +182,12 @@ async function saveProvider() {
     baseUrl: form.baseUrl.trim().replace(/\/+$/, ''),
     apiKey: form.apiKey.trim(),
     format: LLM_FORMATS.includes(form.format) ? form.format : 'openai',
-    models: form.models.split(/[\s,，、]+/).map((s) => s.trim()).filter(Boolean),
-    model: form.model.trim(),
+    models: form.modelList.map((m) => ({
+      name: (m.name || m.modelId).trim(),
+      modelId: (m.modelId || m.name).trim(),
+      contextWindow: Number(m.contextWindow) || 0,
+    })),
+    model: form.model || form.modelList[0]?.modelId || '',
   }
   if (!payload.name || !payload.baseUrl) return
   // 保存前校验 Base URL，阻止保存内网/回环等不安全地址
@@ -188,7 +229,7 @@ async function testConnection(p) {
     const mod = await import('@/api/llm')
     let acc = ''
     await mod.streamChat(
-      { ...p, model: p.model || p.models[0] },
+      { ...p, model: p.model || p.models[0]?.modelId },
       [{ role: 'user', content: '请用一句话回复：连接测试成功。' }],
       (t) => { acc += t },
       {}
@@ -550,13 +591,55 @@ onUnmounted(() => {})
               <option v-for="f in formats" :key="f.value" :value="f.value">{{ f.label }}</option>
             </select>
           </div>
-          <div class="fld">
+          <div class="fld fld-full">
             <label>模型列表</label>
-            <input v-model="form.models" placeholder="逗号分隔，如 glm-4-plus, glm-4-air" />
-          </div>
-          <div class="fld">
-            <label>默认模型</label>
-            <input v-model="form.model" placeholder="留空则取列表第一个" />
+            <div class="model-manager">
+              <div v-if="form.modelList.length" class="model-list">
+                <div
+                  v-for="(m, idx) in form.modelList"
+                  :key="m.modelId + idx"
+                  class="model-row"
+                  :class="{ active: form.model === m.modelId }"
+                >
+                  <div class="model-row-head">
+                    <button type="button" class="mc-set" :title="form.model === m.modelId ? '默认模型' : '点击设为默认'" @click="setDefaultModel(m.modelId)">
+                      <span class="mc-radio" :class="{ on: form.model === m.modelId }"></span>
+                    </button>
+                    <span class="mc-name" @click="toggleEditModel(idx)">{{ m.name || m.modelId }}</span>
+                    <span v-if="form.model === m.modelId" class="mc-default">默认</span>
+                    <span v-if="m.contextWindow" class="mc-ctx muted">{{ (m.contextWindow / 1000) >= 1000 ? (m.contextWindow / 1000000) + 'M' : (m.contextWindow / 1000) + 'K' }}</span>
+                    <span class="mc-id muted">{{ m.modelId }}</span>
+                    <div class="mc-ops">
+                      <button type="button" class="mc-edit" :class="{ on: form.editingModel === idx }" title="编辑详情" @click="toggleEditModel(idx)">⚙</button>
+                      <button type="button" class="mc-del" title="删除" @click="removeModel(idx)">×</button>
+                    </div>
+                  </div>
+                  <div v-if="form.editingModel === idx" class="model-row-edit">
+                    <label class="mre-fld">
+                      <span>显示名</span>
+                      <input v-model="m.name" placeholder="如：智谱 GLM" />
+                    </label>
+                    <label class="mre-fld">
+                      <span>模型 ID <em class="muted">*</em></span>
+                      <input v-model="m.modelId" placeholder="如：glm-4-plus（API 实际调用名）" />
+                    </label>
+                    <label class="mre-fld mre-ctx">
+                      <span>上下文窗口</span>
+                      <input v-model.number="m.contextWindow" type="number" min="0" placeholder="如：128000" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="model-empty muted">暂无模型，在下方添加</div>
+              <div class="model-add">
+                <input
+                  v-model="form.newModel"
+                  placeholder="输入模型 ID，回车添加（支持逗号批量）"
+                  @keydown.enter.prevent="addModel"
+                />
+                <button type="button" class="btn btn-ghost btn-sm" :disabled="!form.newModel.trim()" @click="addModel">添加</button>
+              </div>
+            </div>
           </div>
           <div class="form-actions">
             <button class="btn btn-primary btn-sm" :disabled="!form.name || !form.baseUrl" @click="saveProvider">
@@ -574,7 +657,7 @@ onUnmounted(() => {})
                 {{ p.name }}
                 <span v-if="p.id === activeId" class="pi-tag">当前使用</span>
               </div>
-              <div class="pi-meta muted">{{ p.baseUrl }} · {{ p.format }} · 模型：{{ p.model || p.models[0] || '—' }}</div>
+              <div class="pi-meta muted">{{ p.baseUrl }} · {{ p.format }} · 模型：{{ p.model || p.models[0]?.modelId || '—' }}{{ p.models.length > 1 ? ' 等 ' + p.models.length + ' 个' : '' }}</div>
               <div class="pi-key muted">API Key：{{ maskKey(p.apiKey) }}</div>
             </div>
             <div class="pi-actions">
@@ -802,6 +885,89 @@ onUnmounted(() => {})
   }
 }
 .form-actions { grid-column: 1 / -1; display: flex; gap: $space-2; }
+.fld-full { grid-column: 1 / -1; }
+
+// 可视化模型列表管理
+.model-manager {
+  display: flex; flex-direction: column; gap: $space-2;
+}
+.model-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.model-row {
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  background: $bg-panel;
+  overflow: hidden;
+  &.active { border-color: $brand; background: $brand-soft; }
+}
+.model-row-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+}
+.mc-set {
+  display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border: none; background: none; cursor: pointer; padding: 0;
+}
+.mc-radio {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid $border-default;
+  &.on { border-color: $brand; background: $brand; box-shadow: inset 0 0 0 3px $bg-panel; }
+}
+.mc-name {
+  font-size: 13px; font-weight: 500; color: $text-primary; cursor: pointer;
+  &:hover { color: $brand; }
+}
+.mc-default {
+  font-size: 10px; padding: 1px 6px; border-radius: 4px;
+  background: $brand; color: #fff;
+}
+.mc-ctx {
+  font-size: 11px; padding: 1px 5px; border-radius: 4px;
+  background: $bg-elevated;
+}
+.mc-id {
+  font-size: 11px; font-family: monospace;
+  margin-left: auto;
+}
+.mc-ops { display: flex; gap: 2px; }
+.mc-edit, .mc-del {
+  width: 22px; height: 22px; border: none; border-radius: 4px;
+  background: transparent; color: $text-tertiary; cursor: pointer;
+  font-size: 13px; line-height: 1;
+  &:hover { background: $bg-panel-2; color: $text-primary; }
+  &.on { background: $brand-soft; color: $brand; }
+}
+.mc-del:hover { background: $danger; color: #fff; }
+.model-row-edit {
+  display: flex; gap: $space-3; flex-wrap: wrap;
+  padding: 8px 12px 12px;
+  border-top: 1px dashed $border-subtle;
+  background: $bg-panel-2;
+}
+.mre-fld {
+  display: flex; flex-direction: column; gap: 3px;
+  flex: 1; min-width: 140px;
+  span { font-size: 11px; color: $text-secondary; }
+  em { font-style: normal; color: $danger; }
+  input {
+    height: 30px; padding: 0 8px;
+    background: $bg-panel; border: 1px solid $border-subtle;
+    border-radius: $radius-md; color: $text-primary; font-size: 12px; outline: none;
+    &:focus { border-color: $brand; }
+  }
+}
+.mre-ctx { max-width: 140px; flex: 0 0 140px; }
+.model-empty { font-size: 12px; padding: 4px 0; }
+.model-add {
+  display: flex; gap: $space-2;
+  input {
+    flex: 1; height: 32px; padding: 0 $space-3;
+    background: $bg-panel; border: 1px solid $border-subtle;
+    border-radius: $radius-md; color: $text-primary; font-size: 12px; outline: none;
+    &:focus { border-color: $brand; }
+  }
+}
 .provider-list { display: flex; flex-direction: column; gap: 2px; }
 .provider-item {
   display: flex; align-items: center; justify-content: space-between; gap: $space-4;
