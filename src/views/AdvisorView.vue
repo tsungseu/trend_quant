@@ -7,6 +7,49 @@ import { streamChat } from '@/api/llm'
 
 const llmStore = useLlmStore()
 
+// ---- 投顾运行时选项：当前模型 + 思考程度（持久化到 localStorage）----
+const RT_KEY = 'advisor.runtime'
+const EFFORT_LEVELS = [
+  { value: 'low', label: 'Low', desc: '快速直答' },
+  { value: 'high', label: 'High', desc: '标准推理' },
+  { value: 'max', label: 'Max', desc: '深度推理' },
+]
+function loadRuntime() {
+  try {
+    const raw = localStorage.getItem(RT_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+const runtime = ref(loadRuntime())
+function saveRuntime() {
+  try { localStorage.setItem(RT_KEY, JSON.stringify(runtime.value)) } catch {}
+}
+// 当前可选模型列表（来自 activeProvider 的 models，已是对象数组）
+const availableModels = computed(() => {
+  const p = llmStore.activeProvider
+  if (p?.models?.length) return p.models
+  // 兼容：models 为空但 model 字段存在
+  return p?.model ? [{ name: p.model, modelId: p.model, contextWindow: 0 }] : []
+})
+// 当前选中模型的 modelId（优先 runtime 记录，回退 provider 默认）
+const currentModelId = computed(() => {
+  const ids = availableModels.value.map((m) => m.modelId)
+  const saved = runtime.value.model
+  return saved && ids.includes(saved) ? saved : (ids[0] || llmStore.activeProvider?.model || '')
+})
+function selectModel(modelId) {
+  runtime.value.model = modelId
+  saveRuntime()
+}
+// 当前选中模型对象（用于展示 contextWindow 等）
+const currentModelObj = computed(() =>
+  availableModels.value.find((m) => m.modelId === currentModelId.value) || null
+)
+const currentEffort = computed({
+  get: () => runtime.value.effort || 'low',
+  set: (v) => { runtime.value.effort = v; saveRuntime() },
+})
+
 // 会话列表：从 mock 初始化，发送/新建时实时更新
 const sessions = ref(JSON.parse(JSON.stringify(initialSessions)))
 const activeSessionId = ref('s1')
@@ -89,22 +132,79 @@ const SYSTEM_PROMPT =
 // 真实 LLM 流式调用
 async function streamFromLlm(q, aiMsg) {
   const provider = llmStore.activeProvider
-  if (!provider || !provider.baseUrl || !provider.model) {
-    throw new Error('未配置 LLM 供应商')
+  // model 优先用投顾顶部选中的；回退 provider 默认/列表首个
+  const model = currentModelId.value || provider?.model || provider?.models?.[0]?.modelId || ''
+  if (!provider || !provider.baseUrl || !model) {
+    throw new Error('未配置 LLM 供应商（缺少 Base URL 或模型）')
   }
   abortCtrl = new AbortController()
+  inThink = false // 重置 think 过滤状态，避免上一轮残留
+  tailBuf = ''
   await streamChat(
-    { ...provider, model: provider.model || provider.models[0] },
+    { ...provider, model, reasoningEffort: currentEffort.value },
     [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: q },
     ],
     (t) => {
-      aiMsg.content += t
+      aiMsg.content += stripThink(t)
       scrollToBottom()
     },
     { signal: abortCtrl.signal }
   )
+}
+
+// MiniMax / DeepSeek 等模型会在流中输出 <think>...</think> 思考过程，
+// 对终端用户无意义且破坏 Markdown 渲染，过滤掉。
+// 流式分段到达时 <think> 标签可能跨 chunk，用状态机 + 尾部缓冲处理。
+// - inThink: 当前是否在 <think> 块内
+// - tailBuf: 末尾可能是不完整标签的残余，缓冲到下一轮再判
+let inThink = false
+let tailBuf = ''
+function stripThink(text) {
+  let s = tailBuf + text
+  tailBuf = ''
+  let out = ''
+  let i = 0
+  const OPEN = '<think>'
+  const CLOSE = '</think>'
+  while (i < s.length) {
+    if (inThink) {
+      // 在 think 内，寻找闭合 </think>
+      const closeIdx = s.indexOf(CLOSE, i)
+      if (closeIdx >= 0) {
+        inThink = false
+        i = closeIdx + CLOSE.length
+      } else {
+        // 本 chunk 内未闭合，剩余全是思考内容。只有当剩余长度 < CLOSE 长度时，
+        // 才可能是被拆分的闭合标签前缀，缓冲到下轮；否则整段丢弃。
+        const remain = s.slice(i)
+        if (remain.length < CLOSE.length) tailBuf = remain
+        i = s.length
+      }
+    } else {
+      // 在正文，寻找 <think> 开头
+      const openIdx = s.indexOf(OPEN, i)
+      if (openIdx >= 0) {
+        out += s.slice(i, openIdx)
+        inThink = true
+        i = openIdx + OPEN.length
+      } else {
+        // 未找到开头。只有当末尾 < OPEN 长度且可能是不完整标签时才缓冲。
+        const remain = s.slice(i)
+        // 找最后一个 '<'，它可能是不完整 <think> 的开头
+        const lastLt = remain.lastIndexOf('<')
+        if (lastLt >= 0 && remain.length - lastLt < OPEN.length && OPEN.startsWith(remain.slice(lastLt))) {
+          out += remain.slice(0, lastLt)
+          tailBuf = remain.slice(lastLt)
+        } else {
+          out += remain
+        }
+        i = s.length
+      }
+    }
+  }
+  return out
 }
 
 // 发送消息：配置完整则真实流式，否则回退模拟流式回复
@@ -239,11 +339,39 @@ onUnmounted(clearStreamTimer)
         <div class="ch-info">
           <div class="ch-avatar">AI</div>
           <div>
-            <div class="ch-name">量化投顾助手 <span class="ch-tag">GPT 驱动</span></div>
+            <div class="ch-name">量化投顾助手 <span class="ch-tag">{{ llmStore.isConfigured ? '真实模型' : 'GPT 驱动' }}</span></div>
             <div class="ch-status"><span class="dot"></span> 在线 · 实时分析</div>
           </div>
         </div>
-        <button class="ch-action" title="清空对话">🗑</button>
+        <div class="ch-controls">
+          <!-- 模型选择 -->
+          <select
+            v-if="availableModels.length"
+            :value="currentModelId"
+            class="ctrl-select"
+            title="选择模型"
+            :disabled="isStreaming"
+            @change="selectModel($event.target.value)"
+          >
+            <option v-for="m in availableModels" :key="m.modelId" :value="m.modelId">
+              {{ m.name }}{{ m.contextWindow ? ' · ' + (m.contextWindow >= 1000000 ? (m.contextWindow / 1000000) + 'M' : Math.round(m.contextWindow / 1000) + 'K') : '' }}
+            </option>
+          </select>
+          <!-- 思考程度 low / high / max -->
+          <div class="ctrl-effort" v-if="llmStore.isConfigured">
+            <button
+              v-for="lv in EFFORT_LEVELS"
+              :key="lv.value"
+              type="button"
+              class="effort-btn"
+              :class="{ active: currentEffort === lv.value }"
+              :title="lv.desc"
+              :disabled="isStreaming"
+              @click="currentEffort = lv.value"
+            >{{ lv.label }}</button>
+          </div>
+          <button class="ch-action" title="清空对话">🗑</button>
+        </div>
       </div>
 
       <div ref="chatRef" class="chat-body">
@@ -477,6 +605,51 @@ onUnmounted(clearStreamTimer)
   font-size: 14px;
   color: $text-tertiary;
   &:hover { background: $bg-panel-2; }
+}
+.ch-controls {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+}
+.ctrl-select {
+  height: 28px;
+  padding: 0 8px;
+  background: $bg-panel-2;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  color: $text-primary;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  max-width: 160px;
+  &:focus { border-color: $brand; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.ctrl-effort {
+  display: flex;
+  background: $bg-panel-2;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  padding: 2px;
+  gap: 2px;
+}
+.effort-btn {
+  height: 22px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: $text-tertiary;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  &:hover:not(:disabled) { color: $text-primary; }
+  &.active {
+    background: $brand;
+    color: #fff;
+  }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .chat-body {

@@ -108,26 +108,52 @@ function buildUrl(provider) {
   return base + path
 }
 
+// 思考程度 -> 各格式参数映射
+// low = 快速直答（不启用推理）；high = 标准推理；max = 深度推理
+const REASONING_MAP = {
+  anthropic: {
+    low: null, // 不开 thinking
+    high: { type: 'enabled', budget_tokens: 4096 },
+    max: { type: 'enabled', budget_tokens: 12000 },
+  },
+  openai: {
+    low: { reasoning_effort: 'low' },
+    high: { reasoning_effort: 'high' },
+    max: { reasoning_effort: 'high' }, // 兼容：部分端点无 max，用 high
+  },
+  responses: {
+    low: { reasoning: { effort: 'low' } },
+    high: { reasoning: { effort: 'high' } },
+    max: { reasoning: { effort: 'high' } },
+  },
+}
+
 function buildBody(provider, messages) {
   const m = provider.model
   const sys = messages.find((x) => x.role === 'system')
   const chat = messages.filter((x) => x.role !== 'system')
+  const effort = provider.reasoningEffort || 'low'
+  const reasoning = (REASONING_MAP[provider.format] || {})[effort]
+
   if (provider.format === 'anthropic') {
+    // thinking 开启时 max_tokens 必须大于 budget，给足余量
+    const budget = reasoning?.budget_tokens || 0
     return {
       model: m,
-      max_tokens: 1024,
+      max_tokens: Math.max(1024, budget + 2048),
       system: sys ? sys.content : '',
       messages: chat,
       stream: true,
+      ...(reasoning ? { thinking: reasoning } : {}),
     }
   }
   if (provider.format === 'responses') {
-    // Responses API：把 system 拼进 instructions，历史放进 input
     return {
       model: m,
       instructions: sys ? sys.content : '',
       input: chat.map((x) => ({ role: x.role, content: x.content })),
       stream: true,
+      ...(reasoning || {}),
     }
   }
   // openai / openai-compatible
@@ -135,7 +161,9 @@ function buildBody(provider, messages) {
     model: m,
     messages,
     stream: true,
-    temperature: 0.6,
+    // low 时用 temperature 控制发散；high/max 走 reasoning_effort
+    temperature: effort === 'low' ? 0.6 : undefined,
+    ...(reasoning || {}),
   }
 }
 
