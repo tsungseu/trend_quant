@@ -1,9 +1,11 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { news, categories, calendar, impactText } from '@/mock/news'
+import MiniMarkdown from '@/components/MiniMarkdown.vue'
 
 const activeCat = ref('all')
-const expanded = ref(new Set())
+/** 已展开资讯 id 集合；用对象保证 Vue 响应式可靠 */
+const expanded = ref({})
 
 const filtered = computed(() =>
   activeCat.value === 'all'
@@ -11,12 +13,17 @@ const filtered = computed(() =>
     : news.filter((n) => n.category === activeCat.value)
 )
 
-function toggle(id) {
-  const s = new Set(expanded.value)
-  if (s.has(id)) s.delete(id)
-  else s.add(id)
-  expanded.value = s
+function isExpanded(id) {
+  return !!expanded.value[id]
 }
+
+function toggle(id) {
+  expanded.value = { ...expanded.value, [id]: !expanded.value[id] }
+}
+
+watch(activeCat, () => {
+  expanded.value = {}
+})
 
 const tagColorClass = (c) => c
 const impactClass = (i) => i
@@ -48,11 +55,11 @@ const impactClass = (i) => i
       <!-- 资讯列表 -->
       <div class="list">
         <article
-          v-for="(n, i) in filtered"
-          :key="i"
+          v-for="n in filtered"
+          :key="n.id"
           class="news-card panel"
-          :class="{ expanded: expanded.has(i) }"
-          @click="toggle(i)"
+          :class="{ expanded: isExpanded(n.id) }"
+          @click="toggle(n.id)"
         >
           <div class="nc-head">
             <span class="nc-tag" :class="tagColorClass(n.tagColor)">{{ n.tag }}</span>
@@ -61,10 +68,15 @@ const impactClass = (i) => i
             <span class="nc-time">{{ n.time }}</span>
           </div>
           <h3 class="nc-title">{{ n.title }}</h3>
-          <p class="nc-summary" :class="{ clamp: !expanded.has(i) }">{{ n.summary }}</p>
+          <p v-show="!isExpanded(n.id)" class="nc-summary clamp">{{ n.summary }}</p>
+
+          <!-- 展开后的正文详情 -->
+          <div v-if="isExpanded(n.id)" class="nc-content">
+            <MiniMarkdown :content="n.content" />
+          </div>
 
           <!-- 研报额外信息 -->
-          <div v-if="n.category === 'research' && expanded.has(i)" class="nc-research">
+          <div v-if="n.category === 'research' && isExpanded(n.id)" class="nc-research">
             <div class="r-item"><span class="r-k">机构</span><span class="r-v">{{ n.source }}</span></div>
             <div class="r-item"><span class="r-k">分析师</span><span class="r-v">{{ n.author }}</span></div>
             <div class="r-item"><span class="r-k">目标价</span><span class="r-v brand">{{ n.target }}</span></div>
@@ -75,6 +87,7 @@ const impactClass = (i) => i
               <span v-for="r in n.related" :key="r" class="related-chip">#{{ r }}</span>
             </div>
             <div class="nc-meta">
+              <span class="expand-hint">{{ isExpanded(n.id) ? '收起' : '查看全文' }}</span>
               <span class="source">{{ n.source }}</span>
               <span class="hot">🔥 {{ n.hot.toLocaleString() }}</span>
             </div>
@@ -240,6 +253,35 @@ const impactClass = (i) => i
   }
 }
 
+.nc-content {
+  margin-top: $space-3;
+  padding: $space-3 $space-4;
+  background: $bg-panel-2;
+  border-radius: $radius-md;
+  border-left: 3px solid $brand;
+  font-size: 13px;
+  color: $text-secondary;
+  line-height: 1.8;
+  :deep(p) { margin: 0 0 $space-2; }
+  :deep(strong) { color: $text-primary; }
+  :deep(blockquote) {
+    margin: $space-2 0 0;
+    padding: $space-2 $space-3;
+    border-left: 2px solid $border-default;
+    color: $text-tertiary;
+    font-size: 12px;
+  }
+  :deep(ul) { margin: 0 0 $space-2; padding-left: $space-4; }
+  :deep(li) { margin-bottom: 4px; }
+  :deep(code) {
+    background: $bg-elevated;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: $brand;
+  }
+}
+
 .nc-research {
   display: flex;
   gap: $space-6;
@@ -280,6 +322,7 @@ const impactClass = (i) => i
   gap: $space-4;
   font-size: 11px;
   color: $text-tertiary;
+  .expand-hint { color: $brand; font-weight: 500; }
   .hot { color: $danger; }
 }
 

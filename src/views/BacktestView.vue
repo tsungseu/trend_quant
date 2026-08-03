@@ -1,178 +1,195 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
-import { makeRng, round, rand } from '@/mock/_helpers'
 import { useThemeStore } from '@/stores/theme'
-import { chartTheme, fmtPct, sign, fmtMoney } from '@/mock/_helpers'
+import { useLlmStore } from '@/stores/llm'
+import { chartTheme } from '@/mock/_helpers'
+import { fetchStockKline } from '@/api/dataClient'
+import { streamChat } from '@/api/llm'
+import {
+  runStrategyBacktest,
+  normalizeBars,
+  resolveKlineCode,
+  buildAiPrompt,
+  fallbackAiComment,
+} from '@/domain/backtest'
+import { createThinkStripper } from '@/utils/stripThink'
 import EChart from '@/components/EChart.vue'
+import MiniMarkdown from '@/components/MiniMarkdown.vue'
 
 const theme = useThemeStore()
+const llmStore = useLlmStore()
 const ct = () => (void theme.theme, chartTheme())
 
-// ---- 编辑器状态 ----
 const config = ref({
-  strategy: 'ma', // ma / grid / momentum / factor
+  strategy: 'ma',
   symbol: 'SH510300',
   symbolName: '沪深300ETF',
   period: '1Y',
-  benchmark: '沪深300',
+  benchmark: '买入持有',
   initialCapital: 100000,
-  // 择时参数
   fastMA: 5,
   slowMA: 20,
-  // 风控参数
   stopLoss: 5,
   takeProfit: 30,
-  positionSize: 80, // %
-  // 滑点手续费
-  commission: 0.03, // %
-  slippage: 0.05, // %
+  positionSize: 80,
+  commission: 0.03,
+  slippage: 0.05,
 })
 
 const strategyOptions = [
   { value: 'ma', label: '双均线择时', desc: '快线上穿慢线买入，下穿卖出' },
-  { value: 'grid', label: '网格交易', desc: '区间内低买高卖捕获震荡' },
-  { value: 'momentum', label: '动量轮动', desc: '持有强势标的，定期调仓' },
-  { value: 'factor', label: '多因子选股', desc: '综合因子打分选股' },
+  { value: 'grid', label: '网格交易', desc: '相对均线低吸高抛' },
+  { value: 'momentum', label: '动量轮动', desc: '价格动量转强时持有' },
+  { value: 'factor', label: '多因子', desc: '均线交叉 + RSI 过滤' },
 ]
+
 const symbolOptions = [
-  { code: 'SH510300', name: '沪深300ETF' },
-  { code: 'SH510050', name: '上证50ETF' },
-  { code: 'SZ159915', name: '创业板ETF' },
-  { code: 'SH512880', name: '证券ETF' },
+  { code: 'SH510300', name: '沪深300ETF', market: 'CN' },
+  { code: 'SH510050', name: '上证50ETF', market: 'CN' },
+  { code: 'SZ159915', name: '创业板ETF', market: 'CN' },
+  { code: 'SH512880', name: '证券ETF', market: 'CN' },
+  { code: 'usNDX', name: '纳斯达克100', market: 'US' },
+  { code: 'usINX', name: '标普500', market: 'US' },
 ]
+
 const periodOptions = [
   { value: '6M', label: '近半年', days: 126 },
   { value: '1Y', label: '近一年', days: 252 },
   { value: '3Y', label: '近三年', days: 756 },
 ]
 
-// ---- 回测状态 ----
-const status = ref('idle') // idle | running | done
+const status = ref('idle') // idle | running | done | error
 const progress = ref(0)
-let runTimer = null
-
-function clearRunTimer() {
-  if (runTimer) {
-    clearInterval(runTimer)
-    runTimer = null
-  }
-}
-
+const progressLabel = ref('')
+const runError = ref('')
 const result = ref(null)
+const aiComment = ref('')
+const aiStatus = ref('idle') // idle | streaming | done | fallback
+let abortCtrl = null
+let cancelled = false
 
-// ---- 运行回测（模拟计算）----
-function runBacktest() {
+function onSymbolChange() {
+  const s = symbolOptions.find((x) => x.code === config.value.symbol)
+  config.value.symbolName = s?.name || config.value.symbol
+}
+
+async function runBacktest() {
   if (status.value === 'running') return
+  cancelled = false
   status.value = 'running'
-  progress.value = 0
+  progress.value = 8
+  progressLabel.value = '拉取真实行情…'
   result.value = null
+  runError.value = ''
+  aiComment.value = ''
+  aiStatus.value = 'idle'
+  if (abortCtrl) abortCtrl.abort()
+  abortCtrl = null
 
-  const cfg = config.value
+  const cfg = { ...config.value }
   const days = periodOptions.find((p) => p.value === cfg.period)?.days || 252
+  const klineCode = resolveKlineCode(cfg.symbol)
 
-  // 进度模拟
-  clearRunTimer()
-  runTimer = setInterval(() => {
-    progress.value += Math.random() * 18 + 8
-    if (progress.value >= 100) {
-      progress.value = 100
-      clearRunTimer()
-      result.value = generateResult(cfg, days)
-      status.value = 'done'
+  try {
+    progress.value = 25
+    const klineState = await fetchStockKline(klineCode, days + 40)
+    if (cancelled) return
+    progress.value = 55
+    progressLabel.value = '计算策略净值…'
+
+    const bars = normalizeBars(klineState)
+    const bt = runStrategyBacktest(bars, cfg)
+    if (cancelled) return
+
+    result.value = {
+      ...bt,
+      meta: {
+        bars: bars.length,
+        source: klineState?.source || 'market',
+        quality: klineState?.quality || 'eod',
+        asOf: klineState?.asOf || bars[bars.length - 1]?.date || '',
+        symbol: cfg.symbol,
+        symbolName: cfg.symbolName,
+      },
     }
-  }, 180)
-}
+    progress.value = 85
+    progressLabel.value = '生成 AI 解读…'
+    status.value = 'done'
+    progress.value = 100
 
-// 离开页面时清理 interval，避免内存泄漏与后台仍在跑
-onUnmounted(clearRunTimer)
-
-// 基于参数生成回测结果（参数影响结果，体现"编辑即生效"）
-function generateResult(cfg, days) {
-  const seed = (cfg.fastMA * 7 + cfg.slowMA * 13 + cfg.stopLoss * 3 + cfg.positionSize + cfg.strategy.charCodeAt(0)) % 9999
-  const r = makeRng(seed + 1)
-
-  let stratVal = 1
-  let benchVal = 1
-  let peak = 1
-  let maxDD = 0
-  const equity = []
-  const drawdown = []
-  const trades = []
-
-  // 参数影响收益：快慢线越接近信号越频繁；止损越小回撤越小但收益也低
-  const driftBonus = (cfg.strategy === 'momentum' ? 0.0006 : 0) + (cfg.strategy === 'factor' ? 0.0008 : 0)
-  const stopLossEffect = cfg.stopLoss >= 8 ? 0.0003 : 0
-  const baseDrift = 0.0008 + driftBonus + stopLossEffect
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date('2026-07-21')
-    d.setDate(d.getDate() - i)
-    const stratShock = (r() - 0.47) * 2
-    const benchShock = (r() - 0.49) * 2
-    stratVal *= 1 + baseDrift + 0.011 * stratShock
-    benchVal *= 1 + 0.0003 + 0.0095 * benchShock
-    peak = Math.max(peak, stratVal)
-    const dd = (stratVal - peak) / peak
-    maxDD = Math.min(maxDD, dd)
-    equity.push({
-      date: d.toISOString().slice(0, 10),
-      strategy: round(stratVal, 4),
-      benchmark: round(benchVal, 4),
-    })
-    drawdown.push({ date: d.toISOString().slice(0, 10), value: round(dd, 4) })
-
-    // 生成交易记录（采样）
-    if (r() > 0.93) {
-      const isBuy = r() > 0.45
-      trades.push({
-        date: d.toISOString().slice(0, 10),
-        action: isBuy ? '买入' : '卖出',
-        price: round(rand(r, 3, 220), 2),
-        qty: Math.round(rand(r, 100, 5000) / 100) * 100,
-        reason: isBuy ? (cfg.strategy === 'ma' ? '金叉买入' : '信号触发') : (cfg.strategy === 'ma' ? '死叉卖出' : '止盈止损'),
-      })
-    }
-  }
-
-  const finalStrat = stratVal
-  const finalBench = benchVal
-  const years = days / 252
-  const annRet = Math.pow(finalStrat, 1 / years) - 1
-  const benchRet = Math.pow(finalBench, 1 / years) - 1
-
-  return {
-    equity,
-    drawdown,
-    trades: trades.slice(-20).reverse(),
-    metrics: {
-      总收益: round((finalStrat - 1) * 100, 2) + '%',
-      年化收益: round(annRet * 100, 2) + '%',
-      基准年化: round(benchRet * 100, 2) + '%',
-      超额收益: round((annRet - benchRet) * 100, 2) + '%',
-      最大回撤: round(maxDD * 100, 2) + '%',
-      夏普比率: round(0.9 + annRet * 2.5 + (8 - cfg.stopLoss) * 0.05, 2),
-      索提诺: round(1.3 + annRet * 3, 2),
-      胜率: round(0.55 + r() * 0.12, 4),
-      交易次数: trades.length,
-      卡玛比率: round((annRet / Math.abs(maxDD)) , 2),
-    },
+    await generateAiComment(cfg, bt.metrics, bars.length, result.value.meta.source)
+  } catch (e) {
+    if (cancelled) return
+    console.warn('[backtest]', e)
+    runError.value = e?.message || '回测失败'
+    status.value = 'error'
+    progress.value = 0
   }
 }
 
-// ---- 图表 ----
+async function generateAiComment(cfg, metrics, barsCount, dataSource) {
+  const payload = {
+    config: cfg,
+    metrics,
+    symbolName: cfg.symbolName,
+    barsCount,
+    dataSource,
+  }
+
+  if (!llmStore.configComplete) {
+    aiComment.value = fallbackAiComment(payload)
+    aiStatus.value = 'fallback'
+    return
+  }
+
+  const provider = llmStore.activeProvider
+  aiStatus.value = 'streaming'
+  aiComment.value = ''
+  abortCtrl = new AbortController()
+  const stripper = createThinkStripper()
+  try {
+    await streamChat(
+      { ...provider, model: provider.model },
+      [
+        {
+          role: 'system',
+          content:
+            '你是趋势量化的回测分析助手。只做历史回测解读与研究提示，输出简洁中文 Markdown，必须声明不构成投资建议。不要输出思考过程标签。',
+        },
+        { role: 'user', content: buildAiPrompt(payload) },
+      ],
+      (t) => {
+        aiComment.value += stripper.push(t)
+      },
+      { signal: abortCtrl.signal }
+    )
+    if (!aiComment.value.trim()) aiComment.value = fallbackAiComment(payload)
+    aiStatus.value = 'done'
+  } catch (e) {
+    console.warn('[backtest] ai failed:', e?.message)
+    aiComment.value = fallbackAiComment(payload)
+    aiStatus.value = 'fallback'
+  }
+}
+
+onUnmounted(() => {
+  cancelled = true
+  if (abortCtrl) abortCtrl.abort()
+})
+
 const equityOption = computed(() => {
   if (!result.value) return {}
   const t = ct()
   const e = result.value.equity
   return {
-    legend: { top: 0, right: 10, textStyle: { color: t.secondary }, icon: 'roundRect', itemWidth: 14, itemHeight: 3, data: ['策略净值', '基准净值'] },
+    legend: { top: 0, right: 10, textStyle: { color: t.secondary }, icon: 'roundRect', itemWidth: 14, itemHeight: 3, data: ['策略净值', '买入持有'] },
     grid: { left: 16, right: 50, top: 36, bottom: 24, containLabel: true },
     xAxis: { type: 'category', boundaryGap: false, data: e.map((d) => d.date), axisLine: { lineStyle: { color: t.axis } }, axisLabel: { color: t.label, fontSize: 11 }, axisTick: { show: false } },
     yAxis: { type: 'value', axisLabel: { color: t.label, fontSize: 11, formatter: (v) => v.toFixed(2) }, splitLine: { lineStyle: { color: t.split } } },
     tooltip: { trigger: 'axis' },
     series: [
       { name: '策略净值', type: 'line', data: e.map((d) => d.strategy), smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#3b82f6' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.28)' }, { offset: 1, color: 'rgba(59,130,246,0)' }] } } },
-      { name: '基准净值', type: 'line', data: e.map((d) => d.benchmark), smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: t.secondary, type: 'dashed' } },
+      { name: '买入持有', type: 'line', data: e.map((d) => d.benchmark), smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: t.secondary, type: 'dashed' } },
     ],
   }
 })
@@ -209,9 +226,8 @@ const metricList = computed(() => {
 
 <template>
   <div class="backtest">
-    <!-- 左：策略编辑器 -->
     <aside class="panel editor">
-      <div class="panel-title"><h3>🧪 策略编辑器</h3></div>
+      <div class="panel-title"><h3>策略编辑器</h3></div>
       <div class="form">
         <div class="field">
           <label>策略类型</label>
@@ -231,8 +247,13 @@ const metricList = computed(() => {
 
         <div class="field">
           <label>回测标的</label>
-          <select v-model="config.symbol" @change="config.symbolName = symbolOptions.find(s=>s.code===config.symbol)?.name">
-            <option v-for="s in symbolOptions" :key="s.code" :value="s.code">{{ s.name }}</option>
+          <select v-model="config.symbol" @change="onSymbolChange">
+            <optgroup label="A股 ETF">
+              <option v-for="s in symbolOptions.filter(x => x.market === 'CN')" :key="s.code" :value="s.code">{{ s.name }}</option>
+            </optgroup>
+            <optgroup label="海外指数">
+              <option v-for="s in symbolOptions.filter(x => x.market === 'US')" :key="s.code" :value="s.code">{{ s.name }}</option>
+            </optgroup>
           </select>
         </div>
 
@@ -244,43 +265,26 @@ const metricList = computed(() => {
         </div>
 
         <div class="divider">择时参数</div>
-
         <div class="slider-field">
-          <div class="sf-head">
-            <label>快线周期</label>
-            <span class="sf-val num">{{ config.fastMA }}</span>
-          </div>
+          <div class="sf-head"><label>快线周期</label><span class="sf-val num">{{ config.fastMA }}</span></div>
           <input type="range" v-model.number="config.fastMA" min="3" max="30" />
         </div>
         <div class="slider-field">
-          <div class="sf-head">
-            <label>慢线周期</label>
-            <span class="sf-val num">{{ config.slowMA }}</span>
-          </div>
+          <div class="sf-head"><label>慢线周期</label><span class="sf-val num">{{ config.slowMA }}</span></div>
           <input type="range" v-model.number="config.slowMA" min="10" max="60" />
         </div>
 
         <div class="divider">风控参数</div>
-
         <div class="slider-field">
-          <div class="sf-head">
-            <label>止损线 (%)</label>
-            <span class="sf-val num down">-{{ config.stopLoss }}%</span>
-          </div>
+          <div class="sf-head"><label>止损线 (%)</label><span class="sf-val num down">-{{ config.stopLoss }}%</span></div>
           <input type="range" v-model.number="config.stopLoss" min="1" max="20" />
         </div>
         <div class="slider-field">
-          <div class="sf-head">
-            <label>止盈线 (%)</label>
-            <span class="sf-val num up">+{{ config.takeProfit }}%</span>
-          </div>
+          <div class="sf-head"><label>止盈线 (%)</label><span class="sf-val num up">+{{ config.takeProfit }}%</span></div>
           <input type="range" v-model.number="config.takeProfit" min="5" max="80" />
         </div>
         <div class="slider-field">
-          <div class="sf-head">
-            <label>仓位比例 (%)</label>
-            <span class="sf-val num brand">{{ config.positionSize }}%</span>
-          </div>
+          <div class="sf-head"><label>仓位比例 (%)</label><span class="sf-val num brand">{{ config.positionSize }}%</span></div>
           <input type="range" v-model.number="config.positionSize" min="20" max="100" />
         </div>
 
@@ -300,31 +304,34 @@ const metricList = computed(() => {
           <span v-if="status === 'running'" class="spinner"></span>
           {{ status === 'running' ? '回测中…' : '▶ 运行回测' }}
         </button>
+        <p class="hint">使用真实日K；海外指数走 Yahoo 代理。AI 解读依赖设置页已配置的模型。</p>
       </div>
     </aside>
 
-    <!-- 右：结果区 -->
     <section class="result-area">
-      <!-- 空状态 -->
       <div v-if="status === 'idle'" class="empty panel">
         <div class="empty-icon">📈</div>
         <h3>配置策略并运行回测</h3>
-        <p>在左侧编辑策略参数，点击"运行回测"查看历史表现、收益曲线与风险指标。</p>
+        <p>基于真实日K撮合双均线/动量/网格等策略，并可用 AI 解读结果。标的含 A 股 ETF 与纳斯达克100、标普500。</p>
       </div>
 
-      <!-- 运行中 -->
       <div v-else-if="status === 'running'" class="empty panel">
         <div class="empty-icon spin">⚙️</div>
         <h3>正在回测…</h3>
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: progress + '%' }"></div>
         </div>
-        <p class="muted">{{ Math.floor(progress) }}% · 模拟撮合 {{ Math.floor(progress * 12) }} 根K线</p>
+        <p class="muted">{{ Math.floor(progress) }}% · {{ progressLabel }}</p>
       </div>
 
-      <!-- 结果 -->
+      <div v-else-if="status === 'error'" class="empty panel">
+        <div class="empty-icon">⚠️</div>
+        <h3>回测失败</h3>
+        <p>{{ runError }}</p>
+        <button class="retry" @click="runBacktest">重试</button>
+      </div>
+
       <template v-else>
-        <!-- 指标条 -->
         <section class="metrics-bar panel">
           <div v-for="m in metricList" :key="m.k" class="mb-item">
             <div class="mb-k">{{ m.k }}</div>
@@ -332,23 +339,38 @@ const metricList = computed(() => {
           </div>
         </section>
 
-        <!-- 净值曲线 -->
         <section class="panel">
           <div class="panel-title">
             <h3>净值曲线</h3>
-            <span class="sub">策略 vs {{ config.benchmark }} · {{ config.symbolName }}</span>
+            <span class="sub">
+              策略 vs 买入持有 · {{ config.symbolName }}
+              <template v-if="result?.meta"> · {{ result.meta.bars }}根K · {{ result.meta.source }}</template>
+            </span>
           </div>
           <EChart :option="equityOption" height="340px" />
         </section>
 
+        <section class="panel ai-panel">
+          <div class="panel-title">
+            <h3>AI 解读</h3>
+            <span class="sub">
+              <template v-if="aiStatus === 'streaming'">生成中…</template>
+              <template v-else-if="aiStatus === 'fallback'">本地摘要（未配置完整模型）</template>
+              <template v-else>模型分析</template>
+            </span>
+          </div>
+          <div class="ai-body">
+            <MiniMarkdown v-if="aiComment" :content="aiComment" />
+            <p v-else class="muted">等待解读…</p>
+          </div>
+        </section>
+
         <div class="row">
-          <!-- 回撤 -->
           <div class="panel">
             <div class="panel-title"><h3>回撤曲线</h3><span class="sub">最大回撤 {{ result.metrics['最大回撤'] }}</span></div>
             <EChart :option="ddOption" height="260px" />
           </div>
 
-          <!-- 交易明细 -->
           <div class="panel">
             <div class="panel-title"><h3>交易明细</h3><span class="sub">最近 {{ result.trades.length }} 笔</span></div>
             <table class="trade-table">
@@ -382,7 +404,6 @@ const metricList = computed(() => {
   min-height: calc(100vh - var(--topbar-h) - 48px);
 }
 
-/* 编辑器 */
 .editor {
   display: flex;
   flex-direction: column;
@@ -402,10 +423,7 @@ const metricList = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  label {
-    font-size: 12px;
-    color: $text-secondary;
-  }
+  label { font-size: 12px; color: $text-secondary; }
   select, input[type="number"] {
     height: 36px;
     padding: 0 $space-3;
@@ -422,6 +440,12 @@ const metricList = computed(() => {
   display: flex;
   gap: $space-3;
   .field { flex: 1; }
+}
+.hint {
+  font-size: 11px;
+  color: $text-tertiary;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .strategy-grid {
@@ -450,7 +474,6 @@ const metricList = computed(() => {
 .divider {
   font-size: 11px;
   color: $text-tertiary;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
   padding-top: $space-2;
   border-top: 1px solid $border-subtle;
@@ -519,7 +542,6 @@ input[type="range"] {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 结果区 */
 .result-area {
   display: flex;
   flex-direction: column;
@@ -540,7 +562,15 @@ input[type="range"] {
     &.spin { animation: spin 2s linear infinite; }
   }
   h3 { font-size: 18px; margin-bottom: $space-2; }
-  p { color: $text-secondary; max-width: 360px; }
+  p { color: $text-secondary; max-width: 400px; }
+}
+.retry {
+  margin-top: $space-4;
+  padding: 8px 16px;
+  border-radius: $radius-md;
+  background: $brand;
+  color: #fff;
+  font-size: 13px;
 }
 .progress-bar {
   width: 280px;
@@ -575,6 +605,14 @@ input[type="range"] {
     &.up { color: $up; }
     &.down { color: $down; }
   }
+}
+
+.ai-panel .ai-body {
+  padding: $space-4 $space-5 $space-5;
+  font-size: 13px;
+  line-height: 1.7;
+  color: $text-secondary;
+  .muted { color: $text-tertiary; margin: 0; }
 }
 
 .row {
