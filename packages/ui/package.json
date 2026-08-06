@@ -1,0 +1,17 @@
+{
+  "name": "@trendquant/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0"
+  },
+  "dependencies": {
+    "@trendquant/design-tokens": "0.1.0"
+  }
+}
