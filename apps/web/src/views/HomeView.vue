@@ -1,37 +1,24 @@
 <script setup>
 import { TqButton } from '@trendquant/ui'
 
-const terminalUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+const studioUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+const agentUrl = `${studioUrl.replace(/\/$/, '')}/advisor`
 
-// 浅色内容区：四条能力线，各一个标题 + 一句话，编辑式排布（非卡片堆叠）
+// 浅色内容区：两条产品线叙事
 const pillars = [
   {
-    slug: 'strategies',
+    slug: 'agent',
     index: '01',
-    kicker: '策略',
-    title: '把研究沉淀为可复用的策略',
-    line: '因子、信号与组合规则统一建模，回测与实盘共用同一套逻辑，避免研究到执行的漂移。',
+    kicker: 'MindQuant Agent',
+    title: '在线 AI 投研，把问题说清楚',
+    line: '对话式研报解读、策略思路探讨与组合建议，辅助研究而非代客理财。',
   },
   {
-    slug: 'data',
+    slug: 'studio',
     index: '02',
-    kicker: '数据',
-    title: '一致、可追溯的行情与基本面数据',
-    line: '行情、基金净值、指数与宏观指标汇聚一处，带数据质量元信息，让每个判断都有据可查。',
-  },
-  {
-    slug: 'trading',
-    index: '03',
-    kicker: '交易',
-    title: '从信号到下单的清晰链路',
-    line: '持仓、交易与预警贯通，策略触发即时可见，把关键决策留给人，把重复执行交给系统。',
-  },
-  {
-    slug: 'research',
-    index: '04',
-    kicker: '知识',
-    title: '让方法与结论可被检验',
-    line: '教程、策略说明与 API 沉淀为团队知识库，研究过程可复盘、可传承、可协作。',
+    kicker: 'MindQuant Studio',
+    title: '量化交易终端，把研究做扎实',
+    line: '策略回测、行情指标、持仓交易与预警一体，研究态盈亏与模拟衔接清晰可追溯。',
   },
 ]
 </script>
@@ -45,20 +32,20 @@ const pillars = [
         <p class="hero-brand">TrendQuant · 趋势量化</p>
         <h1 class="hero-title">可靠的量化投研系统，<br />服务关键决策</h1>
         <p class="hero-support">
-          在一个终端里完成研究、数据、交易与复盘——冷静、可追溯、为长期决策而建。
+          TrendQuant 旗下 MindQuant Agent 与 Studio：AI 投研对话与量化终端一体叙事——冷静、可追溯、为长期决策而建。
         </p>
         <div class="hero-cta">
-          <TqButton :href="terminalUrl" variant="primary" size="lg">进入终端</TqButton>
-          <RouterLink to="/products" class="hero-ghost-btn">查看产品</RouterLink>
+          <TqButton :href="studioUrl" variant="primary" size="lg">打开 Studio</TqButton>
+          <TqButton :href="agentUrl" variant="secondary" size="lg">试用 Agent</TqButton>
         </div>
       </div>
     </section>
 
-    <!-- 浅色纸感内容区：四条能力线 -->
+    <!-- 浅色纸感内容区：产品线 -->
     <section class="mkt-section pillars">
       <div class="mkt-container">
-        <p class="mkt-eyebrow">一体化投研</p>
-        <h2 class="pillars-head">研究、数据、交易与知识，共用同一套事实。</h2>
+        <p class="mkt-eyebrow">产品线</p>
+        <h2 class="pillars-head">Agent 提问，Studio 验证——共用同一套事实。</h2>
 
         <ul class="pillar-list">
           <li v-for="p in pillars" :key="p.slug" class="pillar-row">
@@ -84,7 +71,8 @@ const pillars = [
       <div class="mkt-container closing-inner">
         <h2 class="closing-title">把关键决策，建立在可靠系统之上。</h2>
         <div class="closing-cta">
-          <TqButton :href="terminalUrl" variant="primary" size="lg">进入终端</TqButton>
+          <TqButton :href="studioUrl" variant="primary" size="lg">打开 Studio</TqButton>
+          <TqButton :href="agentUrl" variant="secondary" size="lg">试用 Agent</TqButton>
         </div>
       </div>
     </section>

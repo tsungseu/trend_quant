@@ -1,7 +1,7 @@
 <script setup>
 import { TqButton } from '@trendquant/ui'
 
-const terminalUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+const studioUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
 
 const principles = [
   {
@@ -10,11 +10,11 @@ const principles = [
   },
   {
     title: '研究与执行同源',
-    line: '回测里成立的逻辑，实盘里就是同一套逻辑，杜绝研究到执行的漂移。',
+    line: '回测里成立的逻辑，在 Studio 研究链路里就是同一套逻辑，杜绝研究到执行的漂移。',
   },
   {
     title: '把决策留给人',
-    line: '系统负责重复与提醒，关键动作保留人工关口——工具不替你下判断。',
+    line: 'Agent 辅助分析，Studio 负责验证与提醒，关键动作保留人工关口——工具不替你下判断。',
   },
 ]
 </script>
@@ -26,8 +26,9 @@ const principles = [
         <p class="mkt-eyebrow">关于</p>
         <h1 class="page-title">为关键决策，建一套冷静的系统</h1>
         <p class="page-blurb">
-          TrendQuant（趋势量化）是一体化的量化投研终端。我们把研究、数据、交易与知识收敛到同一套事实之上，
-          让专业投研既高效又可追溯。我们相信好的工具应当克制——放大你的判断，而不是替你做判断。
+          TrendQuant（趋势量化）提供 MindQuant Agent（AI 投研）与 MindQuant Studio（量化交易终端）。
+          我们把对话投研与终端作业收敛到同一套事实之上，让专业投研既高效又可追溯。
+          好的工具应当克制——放大你的判断，而不是替你做判断。
         </p>
       </div>
     </header>
@@ -48,9 +49,9 @@ const principles = [
       <div class="mkt-container band-inner">
         <div>
           <h2 class="band-title">准备好开始了吗？</h2>
-          <p class="band-sub">进入终端，用一次真实研究检验它。</p>
+          <p class="band-sub">打开 Studio，用一次真实研究检验它。</p>
         </div>
-        <TqButton :href="terminalUrl" variant="primary" size="lg">进入终端</TqButton>
+        <TqButton :href="studioUrl" variant="primary" size="lg">打开 Studio</TqButton>
       </div>
     </section>
 

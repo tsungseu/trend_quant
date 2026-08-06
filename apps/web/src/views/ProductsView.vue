@@ -6,22 +6,23 @@ import { products } from '@/data/catalog'
   <div class="products">
     <header class="page-head">
       <div class="mkt-container">
-        <p class="mkt-eyebrow">产品</p>
-        <h1 class="page-title">一套终端，四种能力</h1>
+        <p class="mkt-eyebrow">产品 · TrendQuant</p>
+        <h1 class="page-title">两条产品线，一套投研叙事</h1>
         <p class="page-sub">
-          策略、数据、交易与研究共用同一套事实。选择一个入口，深入了解它如何服务你的关键决策。
+          <strong>MindQuant Agent</strong> 负责在线 AI 投研对话；
+          <strong>MindQuant Studio</strong> 负责量化交易终端作业。品牌仍是 TrendQuant。
         </p>
       </div>
     </header>
 
-    <section class="mkt-section quadrant-section">
+    <section class="mkt-section line-section">
       <div class="mkt-container">
-        <div class="quadrant">
+        <div class="product-lines">
           <RouterLink
             v-for="p in products"
             :key="p.slug"
             :to="`/products/${p.slug}`"
-            class="quadrant-cell"
+            class="line-cell"
           >
             <span class="cell-kicker">{{ p.tagline }}</span>
             <h2 class="cell-title">{{ p.name }}</h2>
@@ -61,12 +62,17 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   font-size: clamp(16px, 1.6vw, 19px);
   line-height: 1.6;
   color: $text-paper-secondary;
+
+  strong {
+    color: $text-paper-primary;
+    font-weight: 600;
+  }
 }
 
-.quadrant-section {
+.line-section {
   padding-top: 48px;
 }
-.quadrant {
+.product-lines {
   display: grid;
   grid-template-columns: 1fr 1fr;
   border-top: 1px solid $border-paper;
@@ -76,14 +82,14 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
     grid-template-columns: 1fr;
   }
 }
-.quadrant-cell {
+.line-cell {
   display: flex;
   flex-direction: column;
   padding: 44px 40px 40px;
   border-right: 1px solid $border-paper;
   border-bottom: 1px solid $border-paper;
   background: $bg-paper;
-  transition: background-color 0.18s $ease, transform 0.18s $ease;
+  transition: background-color 0.18s $ease;
 
   &:hover {
     background: $bg-paper-elevated;

@@ -63,12 +63,6 @@ export function buildRoutes() {
       meta: { title: '回测编辑器' },
     },
     {
-      path: '/app/news',
-      name: 'news',
-      component: () => import('@/views/NewsView.vue'),
-      meta: { title: '资讯' },
-    },
-    {
       path: '/app/funds',
       name: 'funds',
       component: () => import('@/views/FundsListView.vue'),
@@ -98,7 +92,9 @@ export function buildRoutes() {
     { path: '/advisor', redirect: '/app/advisor' },
     { path: '/settings', redirect: '/app/settings' },
     { path: '/backtest', redirect: '/app/backtest' },
-    { path: '/news', redirect: '/app/news' },
+    // 资讯模块已下线：书签落到总览
+    { path: '/news', redirect: '/app' },
+    { path: '/app/news', redirect: '/app' },
     { path: '/funds', redirect: '/app/funds' },
     { path: '/funds/:code', redirect: (to) => `/app/funds/${to.params.code}` },
     { path: '/data', redirect: '/app/data' },

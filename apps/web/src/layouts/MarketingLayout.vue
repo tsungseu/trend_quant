@@ -2,22 +2,23 @@
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TqButton, TqNavLink } from '@trendquant/ui'
+import { products } from '@/data/catalog'
 
 const route = useRoute()
 
-// 进入终端地址：默认本地开发端口 5173 的 /app；生产（GitHub Pages hash 路由）
-// 通过 VITE_TERMINAL_URL 注入，见 apps/web/.env.example
-const terminalUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+// Studio 入口：默认本地 5173 /app；生产通过 VITE_TERMINAL_URL 注入
+const studioUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+const agentUrl = computed(() => `${studioUrl.replace(/\/$/, '')}/advisor`)
 
 const links = [
-  { to: '/products', label: '产品' },
   { to: '/pricing', label: '价格' },
   { to: '/docs', label: '知识库' },
   { to: '/about', label: '关于' },
 ]
 
-// 首页顶部为深色全幅英雄区：导航悬浮其上、透明反色；滚动后落地为浅色纸感条。
-// 其它页面顶部即为浅色内容，导航始终为浅色实底。
+const productMenuOpen = ref(false)
+const productsActive = computed(() => String(route.path).startsWith('/products'))
+
 const scrolled = ref(false)
 const heroDark = computed(() => route.name === 'home')
 const navTransparent = computed(() => heroDark.value && !scrolled.value)
@@ -57,11 +58,42 @@ const year = new Date().getFullYear()
         </RouterLink>
 
         <nav class="nav-links">
+          <div
+            class="nav-dropdown"
+            @mouseenter="productMenuOpen = true"
+            @mouseleave="productMenuOpen = false"
+            @focusin="productMenuOpen = true"
+            @focusout="productMenuOpen = false"
+          >
+            <RouterLink
+              to="/products"
+              class="dropdown-trigger"
+              :class="{ 'is-active': productsActive }"
+            >
+              产品
+              <svg class="chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </RouterLink>
+            <div class="dropdown-panel" :class="{ open: productMenuOpen }" role="menu">
+              <RouterLink
+                v-for="p in products"
+                :key="p.slug"
+                :to="`/products/${p.slug}`"
+                class="dropdown-item"
+                role="menuitem"
+              >
+                <span class="dd-name">{{ p.name }}</span>
+                <span class="dd-tag">{{ p.tagline }}</span>
+              </RouterLink>
+            </div>
+          </div>
           <TqNavLink v-for="l in links" :key="l.to" :to="l.to">{{ l.label }}</TqNavLink>
         </nav>
 
         <div class="nav-cta">
-          <TqButton :href="terminalUrl" variant="primary" size="md">进入终端</TqButton>
+          <TqButton :href="agentUrl" variant="ghost" size="md">试用 Agent</TqButton>
+          <TqButton :href="studioUrl" variant="primary" size="md">打开 Studio</TqButton>
         </div>
       </div>
     </header>
@@ -83,10 +115,8 @@ const year = new Date().getFullYear()
         <div class="footer-cols">
           <div class="footer-col">
             <span class="footer-h">产品</span>
-            <RouterLink to="/products/strategies">量化策略</RouterLink>
-            <RouterLink to="/products/data">数据服务</RouterLink>
-            <RouterLink to="/products/trading">交易执行</RouterLink>
-            <RouterLink to="/products/research">研究工作台</RouterLink>
+            <RouterLink to="/products/agent">MindQuant Agent</RouterLink>
+            <RouterLink to="/products/studio">MindQuant Studio</RouterLink>
           </div>
           <div class="footer-col">
             <span class="footer-h">资源</span>
@@ -96,7 +126,8 @@ const year = new Date().getFullYear()
           </div>
           <div class="footer-col">
             <span class="footer-h">开始</span>
-            <a :href="terminalUrl">进入终端</a>
+            <a :href="agentUrl">试用 Agent</a>
+            <a :href="studioUrl">打开 Studio</a>
           </div>
         </div>
       </div>
@@ -118,7 +149,6 @@ const year = new Date().getFullYear()
   background: $bg-paper;
 }
 
-// ---- 顶部导航 ----
 .site-nav {
   position: fixed;
   top: 0;
@@ -178,21 +208,101 @@ const year = new Date().getFullYear()
   }
 }
 
-.nav-cta {
-  margin-left: auto;
+.nav-dropdown {
+  position: relative;
 }
 
-// 透明态（悬浮深色英雄区）：反色为浅字
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary, #475569);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.15s $ease;
+
+  &:hover,
+  &.is-active {
+    color: var(--brand, #2563eb);
+  }
+
+  .chevron {
+    opacity: 0.65;
+  }
+}
+
+.dropdown-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 280px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid $border-paper;
+  border-radius: 12px;
+  box-shadow: $shadow-md;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.15s $ease, transform 0.15s $ease, visibility 0.15s $ease;
+  z-index: 60;
+
+  &.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+
+  &:hover {
+    background: $bg-paper-elevated;
+  }
+}
+
+.dd-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-paper-primary;
+}
+
+.dd-tag {
+  font-size: 12.5px;
+  color: $text-paper-secondary;
+}
+
+.nav-cta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+}
+
 .site-nav.transparent {
   .brand-word {
     color: $hero-text-primary;
   }
+  .dropdown-trigger {
+    color: rgba(230, 235, 245, 0.82);
+
+    &:hover,
+    &.is-active {
+      color: #fff;
+    }
+  }
   :deep(.tq-nav-link) {
     color: rgba(230, 235, 245, 0.82);
   }
-  :deep(.tq-nav-link:hover) {
-    color: #fff;
-  }
+  :deep(.tq-nav-link:hover),
   :deep(.tq-nav-link.is-active) {
     color: #fff;
   }
@@ -202,7 +312,6 @@ const year = new Date().getFullYear()
   flex: 1;
 }
 
-// ---- 页脚 ----
 .site-footer {
   background: $hero-bg-start;
   color: $hero-text-secondary;

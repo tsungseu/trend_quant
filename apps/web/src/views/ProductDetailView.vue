@@ -5,9 +5,19 @@ import { TqButton } from '@trendquant/ui'
 import { getProduct, products } from '@/data/catalog'
 
 const route = useRoute()
-const terminalUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+const studioBase = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
 
 const product = computed(() => getProduct(route.params.slug))
+
+function productCtaHref(p) {
+  const base = studioBase.replace(/\/$/, '')
+  const path = p?.ctaPath || ''
+  if (!path) return base
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+const ctaHref = computed(() => (product.value ? productCtaHref(product.value) : studioBase))
+const ctaLabel = computed(() => product.value?.ctaLabel || '打开 Studio')
 
 // 相邻产品，供页尾继续浏览
 const others = computed(() =>
@@ -32,7 +42,7 @@ const others = computed(() =>
           <h1 class="detail-title">{{ product.name }}</h1>
           <p class="detail-summary">{{ product.summary }}</p>
           <div class="detail-cta">
-            <TqButton :href="terminalUrl" variant="primary" size="lg">进入终端</TqButton>
+            <TqButton :href="ctaHref" variant="primary" size="lg">{{ ctaLabel }}</TqButton>
           </div>
         </div>
       </section>

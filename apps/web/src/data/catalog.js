@@ -1,59 +1,50 @@
-// 营销站静态内容目录：产品四象限、价格档位、知识库入口。
-// 集中维护，供 Products / ProductDetail / Pricing / Docs 视图共用。
+// 营销站静态内容：品牌 TrendQuant；产品线 MindQuant Agent / Studio。
+// 旧四象限能力并入 Studio 能力清单（不含资讯）。
 
 export const products = [
   {
-    slug: 'strategies',
-    name: '量化策略',
-    tagline: '把研究沉淀为可复用的策略',
+    slug: 'agent',
+    name: 'MindQuant Agent',
+    tagline: '量化交易 Agent',
     summary:
-      '因子、信号与组合规则统一建模，回测与实盘共用同一套逻辑，让研究成果稳定落地。',
+      '在线 AI 投研助手：用自然语言做研报解读、策略思路探讨与组合建议，把对话产出衔接到 Studio 工作台。',
     points: [
-      '因子与信号统一定义，回测实盘同源',
-      '组合与风控规则可组合、可版本化',
-      '策略触发全过程可复盘、可审计',
+      '对话式 AI 投研与研报解读',
+      '策略思路探讨与组合建议（辅助分析，非代客理财）',
+      '与 MindQuant Studio 同一品牌工作流衔接',
     ],
+    ctaLabel: '试用 Agent',
+    ctaPath: '/advisor',
   },
   {
-    slug: 'data',
-    name: '数据服务',
-    tagline: '一致、可追溯的市场数据',
+    slug: 'studio',
+    name: 'MindQuant Studio',
+    tagline: '量化交易终端',
     summary:
-      '行情、基金净值、指数与宏观指标汇聚一处，附带数据质量元信息，让每个判断都有据可查。',
+      'TrendQuant 旗下投研工作台：策略回测、行情指标、持仓交易、预警与投顾分析一体完成关键决策研究。',
     points: [
-      '行情 / 基金 / 指数 / 宏观一体接入',
-      '数据质量与时效元信息随取随查',
-      '缺失与异常显式标注，不静默填补',
+      '量化策略回测研究与买卖点分析',
+      '策略研究态盈亏跟踪与预警',
+      '投顾组合推荐及分析（AI 辅助）',
+      '真实行情 K 线与指标分析',
+      '回测与模拟交易衔接（非券商实盘撮合承诺）',
+      '基金量化、持仓与交易记录',
     ],
-  },
-  {
-    slug: 'trading',
-    name: '交易执行',
-    tagline: '从信号到下单的清晰链路',
-    summary:
-      '持仓、交易与预警贯通，策略触发即时可见，把关键决策留给人，把重复执行交给系统。',
-    points: [
-      '持仓、交易、预警贯通一处',
-      '策略信号即时可见、可确认',
-      '关键动作保留人工决策关口',
-    ],
-  },
-  {
-    slug: 'research',
-    name: '研究工作台',
-    tagline: '让方法与结论可被检验',
-    summary:
-      '教程、策略说明与 API 沉淀为团队知识库，研究过程可复盘、可传承、可协作。',
-    points: [
-      '研究笔记与结论结构化沉淀',
-      '策略说明与 API 文档一体维护',
-      '团队协作复盘，方法可传承',
-    ],
+    ctaLabel: '打开 Studio',
+    ctaPath: '',
   },
 ]
 
 export function getProduct(slug) {
   return products.find((p) => p.slug === slug) || null
+}
+
+/** 旧能力 slug → 新产品落地页（兼容书签） */
+export const legacyProductRedirects = {
+  strategies: 'studio',
+  data: 'studio',
+  trading: 'studio',
+  research: 'agent',
 }
 
 export const pricingTiers = [
@@ -62,13 +53,13 @@ export const pricingTiers = [
     name: 'Free',
     price: '¥0',
     period: '/ 永久',
-    blurb: '面向个人研究者，快速上手一体化投研。',
+    blurb: '面向个人研究者，快速体验 Agent 与 Studio 基础能力。',
     cta: '开始使用',
     featured: false,
     benefits: [
-      '核心行情与基金数据',
+      'MindQuant Agent 基础对话额度',
+      'MindQuant Studio 核心行情与基金数据',
       '基础回测与策略模板',
-      '单人研究工作台',
       '社区知识库访问',
     ],
   },
@@ -77,13 +68,13 @@ export const pricingTiers = [
     name: 'Pro',
     price: '¥299',
     period: '/ 月',
-    blurb: '面向专业投研，覆盖策略到执行的完整链路。',
+    blurb: '面向专业投研，覆盖 Agent 投研到 Studio 执行研究链路。',
     cta: '开始使用',
     featured: true,
     benefits: [
-      '全量数据与质量元信息',
-      '高级回测与组合风控',
-      '实盘信号与交易执行链路',
+      'Agent 高额度 AI 投研',
+      'Studio 全量数据与质量元信息',
+      '高级回测、预警与组合分析',
       '策略版本管理与复盘',
       '优先技术支持',
     ],
@@ -110,7 +101,7 @@ export const docsEntries = [
   {
     slug: 'tutorial',
     name: '教程',
-    summary: '从零搭建第一个策略：数据接入、回测、到实盘信号的完整路径。',
+    summary: '从零上手 MindQuant Agent 与 Studio：对话投研、回测到预警的完整路径。',
   },
   {
     slug: 'strategies',
@@ -120,6 +111,6 @@ export const docsEntries = [
   {
     slug: 'api',
     name: 'API',
-    summary: '数据、回测与交易接口参考，把 TrendQuant 接入你的研究流程。',
+    summary: '数据、回测与投研接口参考，把 TrendQuant 接入你的研究流程。',
   },
 ]

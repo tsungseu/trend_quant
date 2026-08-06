@@ -56,7 +56,8 @@ describe('legacy redirects', () => {
     ['/advisor', '/app/advisor'],
     ['/settings', '/app/settings'],
     ['/backtest', '/app/backtest'],
-    ['/news', '/app/news'],
+    ['/news', '/app'],
+    ['/app/news', '/app'],
     ['/funds', '/app/funds'],
   ])('redirects %s to %s', async (from, to) => {
     const router = createRouter({

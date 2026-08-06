@@ -2,7 +2,7 @@
 import { TqButton } from '@trendquant/ui'
 import { pricingTiers } from '@/data/catalog'
 
-const terminalUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+const studioUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
 </script>
 
 <template>
@@ -35,7 +35,7 @@ const terminalUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/
             <p class="tier-blurb">{{ t.blurb }}</p>
 
             <TqButton
-              :href="terminalUrl"
+              :href="studioUrl"
               :variant="t.featured ? 'primary' : 'secondary'"
               size="lg"
               class="tier-cta"

@@ -1,8 +1,14 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 import MarketingLayout from '@/layouts/MarketingLayout.vue'
 import HomeView from '@/views/HomeView.vue'
+import { legacyProductRedirects } from '@/data/catalog'
 
 export function buildRoutes() {
+  const legacyRedirects = Object.entries(legacyProductRedirects).map(([from, to]) => ({
+    path: `products/${from}`,
+    redirect: `/products/${to}`,
+  }))
+
   return [
     {
       path: '/',
@@ -14,6 +20,7 @@ export function buildRoutes() {
           name: 'products',
           component: () => import('@/views/ProductsView.vue'),
         },
+        ...legacyRedirects,
         {
           path: 'products/:slug',
           name: 'product-detail',
