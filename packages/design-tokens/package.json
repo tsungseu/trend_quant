@@ -1,0 +1,12 @@
+{
+  "name": "@trendquant/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.css",
+  "exports": {
+    ".": "./index.css",
+    "./tokens.scss": "./tokens.scss",
+    "./index.css": "./index.css"
+  }
+}

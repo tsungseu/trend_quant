@@ -1,0 +1,212 @@
+// ============================================================
+// 设计令牌 (Design Tokens) — @trendquant/design-tokens
+// 双主题（深色 / 浅色，终端）+ 营销固定令牌（英雄区深色 / 内容区纸感浅色）
+// 策略：SCSS 变量引用 CSS 变量 var(--xxx)，
+// 这样组件里既有的 color: $text-primary 自动跟随主题。
+// 终端主题由 <html data-theme="dark|light"> 切换；
+// 营销令牌（--bg-paper / --hero-gradient 等）为固定值，不随主题切换。
+// ============================================================
+
+// ---- SCSS 变量 → 全部转发到 CSS 变量（终端主题）----
+$bg-base: var(--bg-base);
+$bg-app: var(--bg-app);
+$bg-panel: var(--bg-panel);
+$bg-panel-2: var(--bg-panel-2);
+$bg-elevated: var(--bg-elevated);
+$bg-hover: var(--bg-hover);
+
+$border-subtle: var(--border-subtle);
+$border-default: var(--border-default);
+$border-strong: var(--border-strong);
+
+$text-primary: var(--text-primary);
+$text-secondary: var(--text-secondary);
+$text-tertiary: var(--text-tertiary);
+$text-inverse: var(--text-inverse);
+
+$brand: var(--brand);
+$brand-hover: var(--brand-hover);
+$brand-soft: var(--brand-soft);
+$gold: var(--gold);
+$gold-soft: var(--gold-soft);
+
+// 涨跌色：深浅主题都保持 红涨绿跌，浅色稍调亮度
+$up: var(--up);
+$up-bg: var(--up-bg);
+$down: var(--down);
+$down-bg: var(--down-bg);
+$flat: var(--flat);
+
+$success: var(--success);
+$warning: var(--warning);
+$danger: var(--danger);
+$info: var(--info);
+$purple: var(--purple);
+$cyan: var(--cyan);
+
+// ---- SCSS 变量 → 转发到 CSS 变量（营销固定令牌）----
+$bg-paper: var(--bg-paper);
+$bg-paper-elevated: var(--bg-paper-elevated);
+$border-paper: var(--border-paper);
+
+$text-paper-primary: var(--text-paper-primary);
+$text-paper-secondary: var(--text-paper-secondary);
+$text-paper-tertiary: var(--text-paper-tertiary);
+
+$hero-gradient: var(--hero-gradient);
+$hero-bg-start: var(--hero-bg-start);
+$hero-bg-end: var(--hero-bg-end);
+$hero-text-primary: var(--hero-text-primary);
+$hero-text-secondary: var(--hero-text-secondary);
+
+// ---- 圆角 / 间距 / 阴影（与主题无关）----
+$radius-sm: 6px;
+$radius-md: 10px;
+$radius-lg: 14px;
+$radius-xl: 20px;
+
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-8: 32px;
+$space-10: 40px;
+
+$shadow-sm: 0 1px 2px var(--shadow-color);
+$shadow-md: 0 4px 16px var(--shadow-color-strong);
+$shadow-lg: 0 12px 40px var(--shadow-color-strong);
+// 注：新版设计倾向减少 glow，但暂保留供旧组件/后续任务逐步淘汰。
+$shadow-glow: 0 0 0 1px rgba(59, 130, 246, 0.4), 0 0 20px rgba(59, 130, 246, 0.25);
+
+$ease: cubic-bezier(0.4, 0, 0.2, 1);
+$transition-fast: 0.15s $ease;
+$transition: 0.25s $ease;
+
+// ============================================================
+// CSS 变量定义：终端深色（默认）与浅色主题
+// ============================================================
+:root,
+[data-theme='dark'] {
+  --bg-base: #0b0f1a;
+  --bg-app: #0e1422;
+  --bg-panel: #161d2e;
+  --bg-panel-2: #1b2438;
+  --bg-elevated: #212c44;
+  --bg-hover: #243152;
+
+  --border-subtle: rgba(148, 163, 184, 0.1);
+  --border-default: rgba(148, 163, 184, 0.18);
+  --border-strong: rgba(148, 163, 184, 0.3);
+
+  --text-primary: #e6ebf5;
+  --text-secondary: #9aa7c2;
+  --text-tertiary: #5d6b8a;
+  --text-inverse: #0e1422;
+
+  --brand: #3b82f6;
+  --brand-hover: #2f6fe0;
+  --brand-soft: rgba(59, 130, 246, 0.14);
+  --gold: #f5b73d;
+  --gold-soft: rgba(245, 183, 61, 0.12);
+
+  --up: #ef4444;
+  --up-bg: rgba(239, 68, 68, 0.12);
+  --down: #22c55e;
+  --down-bg: rgba(34, 197, 94, 0.12);
+  --flat: #9aa7c2;
+
+  --success: #22c55e;
+  --warning: #f5b73d;
+  --danger: #ef4444;
+  --info: #3b82f6;
+  --purple: #a855f7;
+  --cyan: #06b6d4;
+
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --shadow-color-strong: rgba(0, 0, 0, 0.45);
+  --sidebar-bg: linear-gradient(180deg, #0c111d 0%, #0a0e18 100%);
+
+  // 图表用的坐标色
+  --chart-axis: rgba(148, 163, 184, 0.15);
+  --chart-split: rgba(148, 163, 184, 0.06);
+  --chart-label: #5d6b8a;
+  --chart-tooltip-bg: rgba(22, 29, 46, 0.96);
+
+  --sidebar-w: 72px;
+  --topbar-h: 60px;
+
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --bg-base: #eef1f6;
+  --bg-app: #f5f7fa;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f1f4f9;
+  --bg-elevated: #e8edf4;
+  --bg-hover: #e3e9f2;
+
+  --border-subtle: rgba(15, 23, 42, 0.07);
+  --border-default: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.2);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-soft: rgba(37, 99, 235, 0.1);
+  --gold: #d97706;
+  --gold-soft: rgba(217, 119, 6, 0.1);
+
+  --up: #dc2626;
+  --up-bg: rgba(220, 38, 38, 0.08);
+  --down: #16a34a;
+  --down-bg: rgba(22, 163, 74, 0.08);
+  --flat: #64748b;
+
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #2563eb;
+  --purple: #9333ea;
+  --cyan: #0891b2;
+
+  --shadow-color: rgba(15, 23, 42, 0.08);
+  --shadow-color-strong: rgba(15, 23, 42, 0.14);
+  --sidebar-bg: linear-gradient(180deg, #ffffff 0%, #f1f4f9 100%);
+
+  --chart-axis: rgba(15, 23, 42, 0.12);
+  --chart-split: rgba(15, 23, 42, 0.06);
+  --chart-label: #94a3b8;
+  --chart-tooltip-bg: rgba(255, 255, 255, 0.98);
+
+  color-scheme: light;
+}
+
+// ============================================================
+// CSS 变量定义：营销固定令牌（不随 data-theme 切换）
+// 官网英雄区：深色渐变底；官网内容区：浅色暖灰纸感底。
+// ============================================================
+:root {
+  // 内容区 · 纸感浅色底
+  --bg-paper: #f6f4f1;
+  --bg-paper-elevated: #fbfaf8;
+  --border-paper: rgba(23, 21, 17, 0.08);
+
+  --text-paper-primary: #171511;
+  --text-paper-secondary: #57534a;
+  --text-paper-tertiary: #8c8778;
+
+  // 英雄区 · 深色渐变底
+  --hero-bg-start: #070b14;
+  --hero-bg-end: #142033;
+  --hero-gradient: linear-gradient(180deg, var(--hero-bg-start) 0%, var(--hero-bg-end) 100%);
+
+  --hero-text-primary: #e6ebf5;
+  --hero-text-secondary: #9aa7c2;
+}
