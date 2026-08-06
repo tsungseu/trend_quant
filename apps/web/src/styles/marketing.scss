@@ -1,0 +1,102 @@
+// ============================================================
+// 营销站全局样式 — @trendquant/web
+// 令牌 CSS 变量由 main.js `import '@trendquant/design-tokens/index.css'`
+// 全局注入；本文件用 tokens.scss 的 $var 简写 + 常量。
+// 视觉主线：深色英雄区（--hero-gradient）+ 浅色纸感内容区（--bg-paper）。
+// 展示字体用 Space Grotesk（Google Fonts CDN，index.html 引入），非 Inter。
+// ============================================================
+
+@use '@trendquant/design-tokens/tokens.scss' as *;
+
+// ---- 展示 / 正文字体族 ----
+$font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+$font-body: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: $font-body;
+  background: $bg-paper;
+  color: $text-paper-primary;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: $font-display;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+p {
+  margin: 0;
+}
+
+// ---- 布局容器 ----
+.mkt-container {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 $space-6;
+}
+
+// ---- 通用 section 节奏 ----
+.mkt-section {
+  padding: 96px 0;
+
+  @media (max-width: 720px) {
+    padding: 64px 0;
+  }
+}
+
+// ---- 小标签（章节眉标）----
+.mkt-eyebrow {
+  font-family: $font-display;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: $brand;
+}
+
+// ---- 路由过渡 ----
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s $ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+// ---- 可复用：深色区块反色文字 ----
+.on-dark {
+  color: $hero-text-primary;
+}
