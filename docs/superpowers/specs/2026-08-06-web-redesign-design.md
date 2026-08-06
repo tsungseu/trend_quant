@@ -3,6 +3,7 @@
 **日期：** 2026-08-06  
 **状态：** 已确认（2026-08-06）  
 **分支：** `feature/web-redesign`  
+**Figma：** https://www.figma.com/design/iQ30fAE70GqbQ71hoR1vag/TrendQuant-Web-Redesign  
 **参考：** [Scale.com](https://scale.com/) 视觉气质 · [BigQuant](https://bigquant.com/) 产品功能矩阵
 
 ---
