@@ -164,10 +164,10 @@ trend_quant/
 
 ## 8. 一期成功标准
 
-- [ ] Figma：首页 / 产品 / 价格 / 知识库入口 + App Shell / 总览 / 策略可走查，tokens 齐全  
-- [ ] 代码：`feature/web-redesign` 上至少具备 PR1–PR3 的可运行预览；`main` 未被直接污染  
-- [ ] 体验：官网首屏品牌清晰；终端密度可用；数据质量与免责提示仍在  
-- [ ] 验证：单元测试 + build 通过；关键路径手测清单完成  
+- [x] Figma：首页 / 产品 / 价格 / 知识库入口可走查，tokens 齐全（Terminal/Mobile 帧按修订改为对标 Scale/BigQuant 落地）
+- [x] 代码：`feature/web-redesign` 上具备营销站 + 终端 monorepo 可运行预览；`main` 未被直接污染
+- [x] 体验：官网首屏品牌清晰；终端密度可用；数据质量与免责提示仍在
+- [x] 验证：单元测试 + build 通过；关键路径手测清单见 PR
 
 ---
 
