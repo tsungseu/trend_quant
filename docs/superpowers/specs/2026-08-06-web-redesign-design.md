@@ -133,14 +133,12 @@ trend_quant/
 
 每个 PR 必须通过现有（或等价）`check`（单测 + build）后再请求合并；`main` 只收已验证 PR。
 
-### 5.3 Figma 交付物（规格最终批准后执行）
+### 5.3 Figma / 视觉参考交付物
 
-1. 封面 + 设计原则  
-2. Design tokens（色 / 字 / 间距 / 组件态）  
-3. 营销：首页、产品矩阵、价格、知识库入口  
-4. 终端：App Shell、总览、策略列表/详情  
-5. 终局预留（灰框）：数据平台、交易增强、会员  
-6. Desktop 优先；关键页补 Mobile 适配帧  
+**已交付（Figma）：** https://www.figma.com/design/iQ30fAE70GqbQ71hoR1vag/TrendQuant-Web-Redesign  
+含 Tokens、Button 变体、营销 Desktop（Home / Products / Pricing / Docs）。
+
+**修订（2026-08-06）：** 终端 App Shell / 总览 / 策略 / Mobile **不再补 Figma**。实现时对标 [Scale.com](https://scale.com/) 与 [BigQuant.com](https://bigquant.com/) 网页视觉与信息密度，并复用 Figma Tokens 与规格 §4。
 
 ---
 

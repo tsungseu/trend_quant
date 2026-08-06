@@ -118,6 +118,8 @@ git commit -m "docs: link Figma prototype for web redesign"
 
 **Gate:** 用户走查 Figma 并回复确认后，再开始 Task 1。
 
+**Amendment (2026-08-06):** 用户接受现有 Figma（`01 Tokens` + `02 Marketing`）。`03 Terminal` 与 Mobile 帧**不再补 Figma**；后续终端/壳层视觉对标 [Scale.com](https://scale.com/) 与 [BigQuant.com](https://bigquant.com/) 网页气质，并结合规格 §4 与已有 Tokens 落地。
+
 ---
 
 ### Task 1: Root workspace + design-tokens 包
