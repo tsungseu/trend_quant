@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
         </svg>
       </button>
 
-      <RouterLink to="/alerts" class="icon-btn" title="通知">
+      <RouterLink to="/app/alerts" class="icon-btn" title="通知">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 01-3.4 0" />
         </svg>

@@ -9,7 +9,7 @@ const router = useRouter()
     <h2>页面未找到</h2>
     <p class="muted">链接可能已失效，或页面尚未上线。</p>
     <div class="nf-actions">
-      <button class="btn btn-primary" @click="router.push('/')">返回首页</button>
+      <button class="btn btn-primary" @click="router.push('/app')">返回首页</button>
       <button class="btn btn-ghost" @click="router.back()">返回上一页</button>
     </div>
   </div>

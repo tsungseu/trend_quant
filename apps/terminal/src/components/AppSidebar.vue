@@ -1,19 +1,28 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
+
+const route = useRoute()
+
+// 策略/基金列表项在详情子路由下也需高亮，其余导航项保持精确匹配
+const NESTED_PREFIXES = ['/app/strategies', '/app/funds']
+function isActive(to) {
+  if (route.path === to) return true
+  return NESTED_PREFIXES.includes(to) && route.path.startsWith(`${to}/`)
+}
 
 const nav = [
-  { to: '/', label: '总览', icon: 'overview' },
-  { to: '/market', label: '行情', icon: 'market' },
-  { to: '/strategies', label: '策略', icon: 'strategy' },
-  { to: '/holdings', label: '持仓', icon: 'holding' },
-  { to: '/trades', label: '交易', icon: 'trade' },
+  { to: '/app', label: '总览', icon: 'overview' },
+  { to: '/app/market', label: '行情', icon: 'market' },
+  { to: '/app/strategies', label: '策略', icon: 'strategy' },
+  { to: '/app/holdings', label: '持仓', icon: 'holding' },
+  { to: '/app/trades', label: '交易', icon: 'trade' },
 ]
 const tools = [
-  { to: '/funds', label: '基金', icon: 'fund' },
-  { to: '/alerts', label: '预警', icon: 'alert', badge: true },
-  { to: '/advisor', label: '投顾', icon: 'advisor' },
-  { to: '/backtest', label: '回测', icon: 'backtest' },
-  { to: '/news', label: '资讯', icon: 'news' },
+  { to: '/app/funds', label: '基金', icon: 'fund' },
+  { to: '/app/alerts', label: '预警', icon: 'alert', badge: true },
+  { to: '/app/advisor', label: '投顾', icon: 'advisor' },
+  { to: '/app/backtest', label: '回测', icon: 'backtest' },
+  { to: '/app/news', label: '资讯', icon: 'news' },
 ]
 </script>
 
@@ -39,7 +48,7 @@ const tools = [
         :key="item.to"
         :to="item.to"
         class="nav-item"
-        :class="{ active: $route.path === item.to }"
+        :class="{ active: isActive(item.to) }"
         :title="item.label"
       >
         <span class="ico" v-html="icons[item.icon]"></span>
@@ -53,7 +62,7 @@ const tools = [
         :key="item.to"
         :to="item.to"
         class="nav-item"
-        :class="{ active: $route.path === item.to }"
+        :class="{ active: isActive(item.to) }"
         :title="item.label"
       >
         <span class="ico" v-html="icons[item.icon]"></span>
@@ -63,7 +72,7 @@ const tools = [
     </nav>
 
     <div class="bottom">
-      <RouterLink class="nav-item" :to="'/settings'" title="设置" :class="{ active: $route.path === '/settings' }">
+      <RouterLink class="nav-item" :to="'/app/settings'" title="设置" :class="{ active: $route.path === '/app/settings' }">
         <span class="ico" v-html="icons.settings"></span>
       </RouterLink>
       <button class="nav-item" title="帮助">

@@ -156,7 +156,7 @@ const monthOption = computed(() => {
   <div class="strategy-detail" v-if="strategy">
     <!-- 返回 + 头部 -->
     <div class="head-bar">
-      <button class="btn btn-ghost btn-sm" @click="router.push('/strategies')">‹ 返回策略</button>
+      <button class="btn btn-ghost btn-sm" @click="router.push('/app/strategies')">‹ 返回策略</button>
     </div>
 
     <section class="profile panel">

@@ -420,7 +420,7 @@ const reasonsByTone = computed(() => {
 <template>
   <div class="fund-detail" v-if="fund">
     <div class="detail-bar">
-      <button class="btn btn-ghost btn-sm back-btn" @click="router.push('/funds')">‹ 返回基金列表</button>
+      <button class="btn btn-ghost btn-sm back-btn" @click="router.push('/app/funds')">‹ 返回基金列表</button>
       <div class="detail-status">
         <span v-if="slot?.loading" class="muted"><span class="spin-dot"></span> 加载净值…</span>
         <span v-else class="muted" :class="qualityClass(navDataMeta)" :title="navDataMeta?.error || ''">
