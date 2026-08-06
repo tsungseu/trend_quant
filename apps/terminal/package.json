@@ -1,0 +1,31 @@
+{
+  "name": "@trendquant/terminal",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "趋势量化 · TrendQuant - 量化投研与行情交易终端",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:unit": "vitest run",
+    "check": "npm run test:unit && npm run build"
+  },
+  "dependencies": {
+    "@trendquant/design-tokens": "0.1.0",
+    "@trendquant/ui": "0.1.0",
+    "echarts": "^5.5.1",
+    "pinia": "^2.2.4",
+    "vue": "^3.5.12",
+    "vue-echarts": "^7.0.3",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^25.0.1",
+    "sass": "^1.80.6",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

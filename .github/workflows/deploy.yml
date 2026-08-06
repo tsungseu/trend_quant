@@ -30,13 +30,13 @@ jobs:
         run: npm ci
       - name: Build
         # base 路径由 vite.config.js 处理（/trend_quant/）
-        run: npm run build
+        run: npm run build -w @trendquant/terminal
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: apps/terminal/dist
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
