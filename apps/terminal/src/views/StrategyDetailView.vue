@@ -269,7 +269,7 @@ const monthOption = computed(() => {
 .strategy-detail {
   display: flex;
   flex-direction: column;
-  gap: $space-5;
+  gap: $space-4;
 }
 .head-bar {
   display: flex;
@@ -280,7 +280,7 @@ const monthOption = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: $space-6;
-  padding: $space-5 $space-6;
+  padding: $space-4 $space-5;
   flex-wrap: wrap;
 }
 .p-left {
@@ -360,7 +360,7 @@ const monthOption = computed(() => {
 .row {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: $space-5;
+  gap: $space-4;
 }
 
 .params {

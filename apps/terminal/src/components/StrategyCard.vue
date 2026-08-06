@@ -39,7 +39,7 @@ function toPoints(arr, w, h, closed) {
 </script>
 
 <template>
-  <RouterLink :to="`/strategies/${strategy.id}`" class="strategy-card panel">
+  <RouterLink :to="`/app/strategies/${strategy.id}`" class="strategy-card panel">
     <div class="head">
       <div class="ico" :style="{ background: strategy.color + '22', color: strategy.color }">
         <span class="icon-dot"></span>
@@ -103,13 +103,12 @@ function toPoints(arr, w, h, closed) {
 
 .strategy-card {
   display: block;
-  padding: $space-4 $space-5;
-  transition: transform $transition-fast, border-color $transition-fast, box-shadow $transition-fast;
+  padding: $space-4;
+  transition: border-color $transition-fast, background $transition-fast;
   cursor: pointer;
   &:hover {
-    transform: translateY(-3px);
-    border-color: $border-default;
-    box-shadow: $shadow-md;
+    border-color: $border-strong;
+    background: $bg-panel-2;
   }
 }
 

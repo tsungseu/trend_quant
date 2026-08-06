@@ -3,6 +3,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useAccountStore } from '@/stores/account'
 import { useThemeStore } from '@/stores/theme'
 import { fmtMoney, fmtSignedMoney, fmtPct, sign, round, chartTheme } from '@/mock/_helpers'
+import { qualityLabel } from '@/utils/dataQuality'
 import StatCard from '@/components/StatCard.vue'
 import EChart from '@/components/EChart.vue'
 
@@ -11,6 +12,9 @@ const theme = useThemeStore()
 const ct = () => (void theme.theme, chartTheme())
 
 const info = computed(() => account.info || {})
+
+// 账户数据质量提示：本地历史快照（非真实实时账户），保持免责可见
+const accountQuality = computed(() => qualityLabel(info.value))
 
 // ---- 收益走势区间切换 ----
 const ranges = [
@@ -152,7 +156,10 @@ onMounted(() => {
       <div class="hero-card panel">
         <div class="hero-top">
           <div class="hero-l">
-            <div class="hero-label">总资产 (CNY)</div>
+            <div class="hero-label">
+              总资产 (CNY)
+              <span class="quality-chip" :title="accountQuality">{{ accountQuality }}</span>
+            </div>
             <div class="hero-value num gold">{{ fmtMoney(info.totalAssets ?? 0) }}</div>
             <div class="hero-sub">
               今日盈亏
@@ -288,35 +295,17 @@ onMounted(() => {
 .overview {
   display: flex;
   flex-direction: column;
-  gap: $space-5;
-}
-
-.overview {
-  display: flex;
-  flex-direction: column;
-  gap: $space-5;
+  gap: $space-4;
 }
 
 .hero {
   display: grid;
   grid-template-columns: 2.2fr repeat(4, 1fr);
-  gap: $space-4;
+  gap: $space-3;
 }
 
 .hero-card {
-  padding: $space-5 $space-6;
-  position: relative;
-  overflow: hidden;
-  &::before {
-    content: '';
-    position: absolute;
-    top: -40%;
-    right: -10%;
-    width: 320px;
-    height: 320px;
-    background: radial-gradient(circle, rgba(245, 183, 61, 0.12), transparent 60%);
-    pointer-events: none;
-  }
+  padding: $space-4 $space-5;
 }
 .hero-top {
   display: flex;
@@ -330,8 +319,24 @@ onMounted(() => {
   flex-direction: column;
   gap: $space-2;
 }
-.hero-label { font-size: 12px; color: $text-secondary; }
-.hero-value { font-size: 36px; font-weight: 700; letter-spacing: -1px; }
+.hero-label {
+  font-size: 12px;
+  color: $text-secondary;
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+}
+.quality-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: $warning;
+  background: $gold-soft;
+  border: 1px solid rgba(245, 183, 61, 0.28);
+  white-space: nowrap;
+}
+.hero-value { font-size: 34px; font-weight: 700; letter-spacing: -1px; }
 .hero-sub { font-size: 13px; color: $text-secondary; }
 .hero-r {
   display: flex;
@@ -354,14 +359,14 @@ onMounted(() => {
 .profit-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: $space-4;
+  gap: $space-3;
 }
 .ps-card {
-  padding: $space-4 $space-5;
+  padding: $space-3 $space-4;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-left: 3px solid transparent;
+  border-left: 2px solid transparent;
   &.up { border-left-color: $up; }
   &.down { border-left-color: $down; }
 }
@@ -378,7 +383,7 @@ onMounted(() => {
 .row-2 {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: $space-5;
+  gap: $space-4;
 }
 .chart-panel {
   display: flex;
