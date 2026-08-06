@@ -13,14 +13,27 @@ defineProps({
   // when set, renders an <a> instead of a <button>
   href: { type: String, default: '' },
   type: { type: String, default: 'button' },
+  disabled: { type: Boolean, default: false },
 })
 </script>
 
 <template>
-  <a v-if="href" :href="href" class="tq-btn" :class="[variant, size]">
+  <a
+    v-if="href"
+    :href="disabled ? undefined : href"
+    :aria-disabled="disabled ? 'true' : undefined"
+    class="tq-btn"
+    :class="[variant, size, { disabled }]"
+  >
     <slot />
   </a>
-  <button v-else :type="type" class="tq-btn" :class="[variant, size]">
+  <button
+    v-else
+    :type="type"
+    :disabled="disabled"
+    class="tq-btn"
+    :class="[variant, size]"
+  >
     <slot />
   </button>
 </template>
@@ -50,10 +63,12 @@ defineProps({
   transform: translateY(1px);
 }
 
-.tq-btn:disabled {
+.tq-btn:disabled,
+.tq-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+  pointer-events: none;
 }
 
 /* Sizes */

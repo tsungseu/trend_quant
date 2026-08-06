@@ -1,4 +1,6 @@
 <script setup>
+import { RouterLink } from 'vue-router'
+
 defineProps({
   // route-based link, rendered as <RouterLink>
   to: { type: [String, Object], default: null },
