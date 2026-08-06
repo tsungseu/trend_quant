@@ -80,6 +80,12 @@ export function buildRoutes() {
       component: () => import('@/views/FundDetailView.vue'),
       meta: { title: '基金详情' },
     },
+    {
+      path: '/app/data',
+      name: 'data',
+      component: () => import('@/views/ComingSoonView.vue'),
+      meta: { title: '数据中心' },
+    },
 
     // 旧路径重定向（无 /app 前缀）
     { path: '/', redirect: '/app' },
@@ -95,6 +101,7 @@ export function buildRoutes() {
     { path: '/news', redirect: '/app/news' },
     { path: '/funds', redirect: '/app/funds' },
     { path: '/funds/:code', redirect: (to) => `/app/funds/${to.params.code}` },
+    { path: '/data', redirect: '/app/data' },
 
     {
       path: '/:pathMatch(.*)*',

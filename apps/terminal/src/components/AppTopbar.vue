@@ -6,7 +6,7 @@ import { useMarketStore } from '@/stores/market'
 import { useThemeStore } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
 import { fmtMoney, fmtPct, fmtThousands } from '@/mock/_helpers'
-import { dataModeLabel } from '@/config/runtime'
+import { dataModeLabel, runtime } from '@/config/runtime'
 
 const route = useRoute()
 const account = useAccountStore()
@@ -79,6 +79,12 @@ const dateLabel = computed(() => {
 })
 
 const modeLabel = computed(() => dataModeLabel())
+// 数据模式徽标色调：demo=提示色，direct=品牌色，proxy(已配置)=成功色
+const modeTone = computed(() => {
+  if (runtime.dataMode === 'proxy' && runtime.proxyBase) return 'proxy'
+  if (runtime.dataMode === 'direct') return 'direct'
+  return 'demo'
+})
 
 onMounted(() => {
   selectedOverseasCodes.value = loadSelections()
@@ -96,7 +102,10 @@ onBeforeUnmount(() => {
   <header class="topbar">
     <div class="left">
       <h1 class="title">{{ pageTitle }}</h1>
-      <div class="date">{{ dateLabel }} · {{ modeLabel }}</div>
+      <div class="left-meta">
+        <span class="date">{{ dateLabel }}</span>
+        <span class="mode-badge" :class="modeTone" :title="modeLabel">{{ modeLabel }}</span>
+      </div>
     </div>
 
     <!-- 三大指数滚动 -->
@@ -198,23 +207,65 @@ onBeforeUnmount(() => {
   gap: $space-6;
   padding: 0 $space-6;
   border-bottom: 1px solid $border-subtle;
-  background: rgba(14, 20, 34, 0.7);
-  backdrop-filter: blur(12px);
+  background: $bg-panel;
   flex-shrink: 0;
 }
 
 .left {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 120px;
   .title {
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
-  .date {
-    font-size: 11px;
-    color: $text-tertiary;
+}
+
+.left-meta {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+}
+.date {
+  font-size: 11px;
+  color: $text-tertiary;
+}
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  &.demo {
+    color: $warning;
+    background: $gold-soft;
+  }
+  &.direct {
+    color: $brand;
+    background: $brand-soft;
+  }
+  &.proxy {
+    color: $success;
+    background: rgba(34, 197, 94, 0.12);
   }
 }
 

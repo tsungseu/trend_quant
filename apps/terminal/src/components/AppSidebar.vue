@@ -10,26 +10,49 @@ function isActive(to) {
   return NESTED_PREFIXES.includes(to) && route.path.startsWith(`${to}/`)
 }
 
-const nav = [
-  { to: '/app', label: '总览', icon: 'overview' },
-  { to: '/app/market', label: '行情', icon: 'market' },
-  { to: '/app/strategies', label: '策略', icon: 'strategy' },
-  { to: '/app/holdings', label: '持仓', icon: 'holding' },
-  { to: '/app/trades', label: '交易', icon: 'trade' },
-]
-const tools = [
-  { to: '/app/funds', label: '基金', icon: 'fund' },
-  { to: '/app/alerts', label: '预警', icon: 'alert', badge: true },
-  { to: '/app/advisor', label: '投顾', icon: 'advisor' },
-  { to: '/app/backtest', label: '回测', icon: 'backtest' },
-  { to: '/app/news', label: '资讯', icon: 'news' },
+const groups = [
+  {
+    key: 'research',
+    label: '投研',
+    items: [
+      { to: '/app', label: '总览', icon: 'overview' },
+      { to: '/app/market', label: '行情', icon: 'market' },
+      { to: '/app/strategies', label: '策略', icon: 'strategy' },
+    ],
+  },
+  {
+    key: 'portfolio',
+    label: '组合',
+    items: [
+      { to: '/app/holdings', label: '持仓', icon: 'holding' },
+      { to: '/app/trades', label: '交易', icon: 'trade' },
+    ],
+  },
+  {
+    key: 'tools',
+    label: '工具',
+    items: [
+      { to: '/app/funds', label: '基金', icon: 'fund' },
+      { to: '/app/alerts', label: '预警', icon: 'alert', badge: true },
+      { to: '/app/advisor', label: '投顾', icon: 'advisor' },
+      { to: '/app/backtest', label: '回测', icon: 'backtest' },
+      { to: '/app/news', label: '资讯', icon: 'news' },
+    ],
+  },
+  {
+    key: 'data',
+    label: '数据',
+    items: [
+      { to: '/app/data', label: '入口', icon: 'data', soon: true },
+    ],
+  },
 ]
 </script>
 
 <template>
   <aside class="sidebar">
-    <div class="logo" title="趋势量化 · TrendQuant">
-      <svg viewBox="0 0 32 32" width="28" height="28">
+    <RouterLink to="/app" class="logo" title="趋势量化 · TrendQuant">
+      <svg viewBox="0 0 32 32" width="26" height="26">
         <rect width="32" height="32" rx="8" fill="#3b82f6" />
         <path
           d="M7 21l5-6 4 3 6-9 3 4"
@@ -40,43 +63,36 @@ const tools = [
           stroke-linejoin="round"
         />
       </svg>
-    </div>
+      <span class="logo-text">趋势量化</span>
+    </RouterLink>
 
     <nav>
-      <RouterLink
-        v-for="item in nav"
-        :key="item.to"
-        :to="item.to"
-        class="nav-item"
-        :class="{ active: isActive(item.to) }"
-        :title="item.label"
-      >
-        <span class="ico" v-html="icons[item.icon]"></span>
-        <span class="label">{{ item.label }}</span>
-      </RouterLink>
-
-      <div class="nav-divider"></div>
-
-      <RouterLink
-        v-for="item in tools"
-        :key="item.to"
-        :to="item.to"
-        class="nav-item"
-        :class="{ active: isActive(item.to) }"
-        :title="item.label"
-      >
-        <span class="ico" v-html="icons[item.icon]"></span>
-        <span class="label">{{ item.label }}</span>
-        <span v-if="item.badge" class="nav-badge"></span>
-      </RouterLink>
+      <div v-for="group in groups" :key="group.key" class="nav-group">
+        <div class="group-label">{{ group.label }}</div>
+        <RouterLink
+          v-for="item in group.items"
+          :key="item.to"
+          :to="item.to"
+          class="nav-item"
+          :class="{ active: isActive(item.to) }"
+          :title="item.label"
+        >
+          <span class="ico" v-html="icons[item.icon]"></span>
+          <span class="label">{{ item.label }}</span>
+          <span v-if="item.soon" class="soon-badge">即将推出</span>
+          <span v-else-if="item.badge" class="nav-badge"></span>
+        </RouterLink>
+      </div>
     </nav>
 
     <div class="bottom">
       <RouterLink class="nav-item" :to="'/app/settings'" title="设置" :class="{ active: $route.path === '/app/settings' }">
         <span class="ico" v-html="icons.settings"></span>
+        <span class="label">设置</span>
       </RouterLink>
       <button class="nav-item" title="帮助">
         <span class="ico" v-html="icons.help"></span>
+        <span class="label">帮助</span>
       </button>
     </div>
   </aside>
@@ -109,6 +125,8 @@ export const icons = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
   news:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z"/></svg>',
+  data:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>',
 }
 </script>
 
@@ -122,34 +140,59 @@ export const icons = {
   border-right: 1px solid $border-subtle;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: $space-4 0;
+  padding: $space-4 $space-2;
   flex-shrink: 0;
   z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .logo {
-  margin-bottom: $space-6;
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: 0 $space-2;
+  margin-bottom: $space-5;
+  flex-shrink: 0;
+
+  .logo-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: $text-primary;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
 }
 
 nav {
   display: flex;
   flex-direction: column;
-  gap: $space-2;
+  gap: $space-1;
   flex: 1;
+  min-height: 0;
 }
 
-.nav-divider {
-  width: 24px;
-  height: 1px;
-  background: $border-subtle;
-  margin: $space-2 auto;
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: $space-3;
+}
+
+.group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: $text-tertiary;
+  padding: 0 $space-2;
+  margin-bottom: $space-1;
+  text-transform: uppercase;
 }
 
 .nav-badge {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 9px;
+  right: $space-2;
   width: 7px;
   height: 7px;
   background: $danger;
@@ -157,23 +200,36 @@ nav {
   border: 2px solid $bg-base;
 }
 
+.soon-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: $gold;
+  background: $gold-soft;
+  border: 1px solid rgba(245, 183, 61, 0.28);
+  white-space: nowrap;
+}
+
 .nav-item {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: 100%;
+  height: 36px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
+  gap: $space-3;
+  padding: 0 $space-2;
   border-radius: $radius-md;
-  color: $text-tertiary;
-  transition: all $transition-fast;
+  color: $text-secondary;
+  transition: background $transition-fast, color $transition-fast;
   cursor: pointer;
 
   .ico {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
     display: flex;
     :deep(svg) {
       width: 100%;
@@ -181,36 +237,33 @@ nav {
     }
   }
   .label {
-    font-size: 10px;
+    font-size: 13px;
+    font-weight: 500;
     line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &:hover {
-    color: $text-secondary;
-    background: rgba(148, 163, 184, 0.06);
+    color: $text-primary;
+    background: $bg-hover;
   }
 
   &.router-link-active,
   &.active {
     color: $brand;
     background: $brand-soft;
-    &::before {
-      content: '';
-      position: absolute;
-      left: -#{$space-4};
-      top: 50%;
-      transform: translateY(-50%);
-      width: 3px;
-      height: 22px;
-      background: $brand;
-      border-radius: 0 3px 3px 0;
-    }
+    font-weight: 600;
   }
 }
 
 .bottom {
   display: flex;
   flex-direction: column;
-  gap: $space-2;
+  gap: 2px;
+  flex-shrink: 0;
+  padding-top: $space-2;
+  border-top: 1px solid $border-subtle;
 }
 </style>

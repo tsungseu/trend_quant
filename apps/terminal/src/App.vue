@@ -107,6 +107,6 @@ onUnmounted(() => {
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: $space-6;
+  padding: $space-5 $space-6;
 }
 </style>
