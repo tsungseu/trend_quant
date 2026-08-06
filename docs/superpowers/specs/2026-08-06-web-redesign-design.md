@@ -1,7 +1,7 @@
 # TrendQuant Web 重设计规格
 
 **日期：** 2026-08-06  
-**状态：** 待用户最终审查  
+**状态：** 已确认（2026-08-06）  
 **分支：** `feature/web-redesign`  
 **参考：** [Scale.com](https://scale.com/) 视觉气质 · [BigQuant](https://bigquant.com/) 产品功能矩阵
 
