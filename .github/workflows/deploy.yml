@@ -1,17 +1,22 @@
 name: Deploy to GitHub Pages
 
+# 单 Pages 站点部署：web（营销站）占据站点根，终端（MindQuant Studio）
+# 作为 /terminal/ 子路径被 web 构建吸收并一同发布。两个应用都使用 hash 路由，
+# 因此刷新深链与互相跳转在无服务端 rewrite 下仍然可用。
+#
+# web 入口：https://tsungseu.github.io/trend_quant/
+# 终端入口：https://tsungseu.github.io/trend_quant/terminal/#/app
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Pages 部署所需的权限
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# 同一时间只跑一个部署
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -28,15 +33,29 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: Build
-        # base 路径由 vite.config.js 处理（/trend_quant/）
+      - name: Build terminal
+        # 终端生产 base 默认 /trend_quant/terminal/（见 apps/terminal/vite.config.js）
         run: npm run build -w @trendquant/terminal
+      - name: Build web
+        # web 生产 base 默认 /（站点根）
+        run: npm run build -w @trendquant/web
+      - name: Merge terminal dist under web dist
+        # 将终端构建产物原样拷贝到 web dist 的 /terminal/ 子路径，统一为单一 Pages 产物
+        run: |
+          mkdir -p apps/web/dist/terminal
+          cp -r apps/terminal/dist/. apps/web/dist/terminal/
+      - name: Assert terminal assets prefixed correctly
+        # 防御性检查：终端 index.html 引用的资源必须以 /trend_quant/terminal/ 开头
+        run: |
+          if ! grep -q "/trend_quant/terminal/" apps/web/dist/terminal/index.html; then
+            echo "::error::terminal index.html does not reference /trend_quant/terminal/ base"; exit 1
+          fi
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/terminal/dist
+          path: apps/web/dist
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
