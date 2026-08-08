@@ -1,0 +1,92 @@
+// ============================================================
+// 设计令牌 (Design Tokens) — @trendquant/design-tokens
+// SCSS 转发层：只提供 $var: var(--*) 简写 + 与主题无关的常量
+// （圆角 / 间距 / 阴影 / 缓动）。
+//
+// 实际 CSS 变量定义（终端深色/浅色主题 + 营销固定令牌）唯一维护于
+// ./index.css，这里通过 @import 引入，避免两处重复。
+//
+// 用法：SCSS 项目 `@use '@trendquant/design-tokens/tokens.scss' as *;`
+// 即可同时拿到 CSS 变量 + `$xxx` 简写；纯 CSS / 非 Sass 项目
+// 直接引入 `@trendquant/design-tokens/index.css` 即可。
+// 二者选其一即可，不要同时引入两者（会重复声明同一批 CSS 变量）。
+// ============================================================
+
+@import './index.css';
+
+// ---- SCSS 变量 → 全部转发到 CSS 变量（终端主题）----
+$bg-base: var(--bg-base);
+$bg-app: var(--bg-app);
+$bg-panel: var(--bg-panel);
+$bg-panel-2: var(--bg-panel-2);
+$bg-elevated: var(--bg-elevated);
+$bg-hover: var(--bg-hover);
+
+$border-subtle: var(--border-subtle);
+$border-default: var(--border-default);
+$border-strong: var(--border-strong);
+
+$text-primary: var(--text-primary);
+$text-secondary: var(--text-secondary);
+$text-tertiary: var(--text-tertiary);
+$text-inverse: var(--text-inverse);
+
+$brand: var(--brand);
+$brand-hover: var(--brand-hover);
+$brand-soft: var(--brand-soft);
+$gold: var(--gold);
+$gold-soft: var(--gold-soft);
+
+// 涨跌色：深浅主题都保持 红涨绿跌，浅色稍调亮度
+$up: var(--up);
+$up-bg: var(--up-bg);
+$down: var(--down);
+$down-bg: var(--down-bg);
+$flat: var(--flat);
+
+$success: var(--success);
+$warning: var(--warning);
+$danger: var(--danger);
+$info: var(--info);
+$purple: var(--purple);
+$cyan: var(--cyan);
+
+// ---- SCSS 变量 → 转发到 CSS 变量（营销固定令牌）----
+$bg-paper: var(--bg-paper);
+$bg-paper-elevated: var(--bg-paper-elevated);
+$border-paper: var(--border-paper);
+
+$text-paper-primary: var(--text-paper-primary);
+$text-paper-secondary: var(--text-paper-secondary);
+$text-paper-tertiary: var(--text-paper-tertiary);
+
+$hero-gradient: var(--hero-gradient);
+$hero-bg-start: var(--hero-bg-start);
+$hero-bg-end: var(--hero-bg-end);
+$hero-text-primary: var(--hero-text-primary);
+$hero-text-secondary: var(--hero-text-secondary);
+
+// ---- 圆角 / 间距 / 阴影（与主题无关）----
+$radius-sm: 6px;
+$radius-md: 10px;
+$radius-lg: 14px;
+$radius-xl: 20px;
+
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-8: 32px;
+$space-10: 40px;
+
+$shadow-sm: 0 1px 2px var(--shadow-color);
+$shadow-md: 0 4px 16px var(--shadow-color-strong);
+$shadow-lg: 0 12px 40px var(--shadow-color-strong);
+// 注：新版设计倾向减少 glow，但暂保留供旧组件/后续任务逐步淘汰。
+$shadow-glow: 0 0 0 1px rgba(59, 130, 246, 0.4), 0 0 20px rgba(59, 130, 246, 0.25);
+
+$ease: cubic-bezier(0.4, 0, 0.2, 1);
+$transition-fast: 0.15s $ease;
+$transition: 0.25s $ease;

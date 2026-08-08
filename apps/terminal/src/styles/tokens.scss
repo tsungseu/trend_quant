@@ -1,0 +1,10 @@
+// ============================================================
+// 终端设计令牌入口 —— 转发自 @trendquant/design-tokens
+// 组件里既有的 `@use '@/styles/tokens' as *;` 继续可用：
+//   - $var 简写（$bg-base、$space-4 ...）由本文件转发
+//   - :root 深色/浅色 CSS 变量定义由 main.js
+//     `import '@trendquant/design-tokens/index.css'` 全局注入一次
+// 这样避免每个 SFC 重复声明整套 CSS 变量。
+// ============================================================
+
+@forward '@trendquant/design-tokens/tokens.scss';
