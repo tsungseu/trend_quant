@@ -3,11 +3,10 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TqButton, TqNavLink } from '@trendquant/ui'
 import { products } from '@/data/catalog'
+import { terminalUrl as studioUrl } from '@/data/terminal'
 
 const route = useRoute()
 
-// Studio 入口：默认本地 5173 /app；生产通过 VITE_TERMINAL_URL 注入
-const studioUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
 const agentUrl = computed(() => `${studioUrl.replace(/\/$/, '')}/advisor`)
 
 const links = [

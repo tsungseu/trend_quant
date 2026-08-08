@@ -1,8 +1,7 @@
 <script setup>
 import { TqButton } from '@trendquant/ui'
 import { pricingTiers } from '@/data/catalog'
-
-const studioUrl = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
+import { terminalUrl as studioUrl } from '@/data/terminal'
 </script>
 
 <template>

@@ -3,9 +3,9 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { TqButton } from '@trendquant/ui'
 import { getProduct, products } from '@/data/catalog'
+import { terminalUrl as studioBase } from '@/data/terminal'
 
 const route = useRoute()
-const studioBase = import.meta.env.VITE_TERMINAL_URL || 'http://localhost:5173/app'
 
 const product = computed(() => getProduct(route.params.slug))
 
