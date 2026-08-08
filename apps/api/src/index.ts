@@ -2,9 +2,11 @@
 
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import multipart from '@fastify/multipart'
 import { config } from './config.js'
 import { authHook } from './lib/auth.js'
 import { healthRoutes } from './routes/health.js'
+import { kbRoutes } from './routes/kb.js'
 
 async function main() {
   const app = Fastify({
@@ -21,6 +23,11 @@ async function main() {
     credentials: true,
   })
 
+  // 文件上传（KB 文档）
+  await app.register(multipart, {
+    limits: { fileSize: 25 * 1024 * 1024 },
+  })
+
   // 全局鉴权 hook（health / 根路径在路由内自查或豁免）
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0]
@@ -29,6 +36,7 @@ async function main() {
   })
 
   await app.register(healthRoutes)
+  await app.register(kbRoutes)
 
   // KB / chat 路由在后续 PR 注册；此处先占位，确认骨架可启动
   app.get('/_version', async () => ({ version: '0.1.0', phase: 'scaffold' }))
