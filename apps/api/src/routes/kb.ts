@@ -10,8 +10,6 @@ import { createDocument, getDocument, listDocuments, updateDocument, deleteDocum
 import { upsertPoints, deleteByDocId, type UpsertPoint } from '../lib/qdrant.js'
 import { embed } from '../lib/embeddings.js'
 import { chunkText } from '../lib/chunk.js'
-import { parseText } from '../lib/parse/text.js'
-import { parsePdf } from '../lib/parse/pdf.js'
 
 const MAX_BYTES = 25 * 1024 * 1024 // 25MB
 
@@ -54,19 +52,8 @@ export async function kbRoutes(app: FastifyInstance): Promise<void> {
         reply.code(422)
         return { error: 'empty_text', document: getDocument(userId, doc.id) }
       }
-
-      const chunks = chunkText(parsed.text)
       updateDocument(userId, doc.id, { status: 'embedding' })
-
-      const vectors = await embed(chunks.map((c) => c.text))
-      const points: UpsertPoint[] = chunks.map((c, i) => ({
-        id: `${doc.id}_${i}`,
-        vector: vectors[i],
-        payload: { docId: doc.id, chunkIdx: c.chunkIdx, text: c.text },
-      }))
-      await upsertPoints(userId, points)
-
-      const done = updateDocument(userId, doc.id, { status: 'indexed', chunkCount: chunks.length, lowConfidence: parsed.lowConfidence })
+      const done = await ingestText(userId, doc.id, parsed.text, parsed.lowConfidence)
       return { document: done }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown'
@@ -95,11 +82,65 @@ export async function kbRoutes(app: FastifyInstance): Promise<void> {
     reply.code(204)
     return null
   })
+
+  // 网页 URL 投递：抓取并抽取正文后走同一套 ingest 流水线
+  app.post('/kb/web', async (req, reply) => {
+    const userId = getUserId(req)
+    const { url } = req.body as { url?: string }
+    if (!url || typeof url !== 'string') {
+      reply.code(400)
+      return { error: 'missing_url' }
+    }
+    const doc = createDocument(userId, {
+      filename: url,
+      contentType: 'text/html',
+      sizeBytes: 0,
+    })
+    try {
+      updateDocument(userId, doc.id, { status: 'parsing' })
+      const { parseWebUrl } = await import('../lib/parse/web.js')
+      const parsed = await parseWebUrl(url)
+      if (!parsed.text) {
+        updateDocument(userId, doc.id, { status: 'failed', error: 'empty_text', lowConfidence: parsed.lowConfidence })
+        reply.code(422)
+        return { error: 'empty_text', document: getDocument(userId, doc.id) }
+      }
+      const result = await ingestText(userId, doc.id, parsed.text, parsed.lowConfidence)
+      return { document: result }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown'
+      const failed = updateDocument(userId, doc.id, { status: 'failed', error: message.slice(0, 300) })
+      reply.code(502)
+      return { error: 'ingest_failed', document: failed }
+    }
+  })
+}
+
+// 共享：已解析文本 → 切块 → embed → 入库
+async function ingestText(userId: string, docId: string, text: string, lowConfidence?: boolean) {
+  const chunks = chunkText(text)
+  const vectors = await embed(chunks.map((c) => c.text))
+  const points: UpsertPoint[] = chunks.map((c, i) => ({
+    id: `${docId}_${i}`,
+    vector: vectors[i],
+    payload: { docId, chunkIdx: c.chunkIdx, text: c.text },
+  }))
+  await upsertPoints(userId, points)
+  return updateDocument(userId, docId, { status: 'indexed', chunkCount: chunks.length, lowConfidence })
 }
 
 async function routeParse(mimetype: string, buf: Buffer) {
-  if (mimetype === 'application/pdf' || mimetype.endsWith('/pdf')) return parsePdf(buf)
-  if (mimetype.startsWith('text/')) return parseText(buf)
-  // 非文本/PDF：PR3 接入图片 OCR / 网页抽取
+  if (mimetype === 'application/pdf' || mimetype.endsWith('/pdf')) {
+    const { parsePdf } = await import('../lib/parse/pdf.js')
+    return parsePdf(buf)
+  }
+  if (mimetype.startsWith('text/')) {
+    const { parseText } = await import('../lib/parse/text.js')
+    return parseText(buf)
+  }
+  if (mimetype.startsWith('image/')) {
+    const { parseImage } = await import('../lib/parse/image.js')
+    return parseImage(buf, mimetype)
+  }
   throw new Error(`unsupported_content_type: ${mimetype}`)
 }
