@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { TqButton, TqNavLink } from '@trendquant/ui'
 import { products } from '@/data/catalog'
@@ -29,8 +29,40 @@ function onScroll() {
 onMounted(() => {
   onScroll()
   window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('keydown', onKeydown)
 })
-onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('keydown', onKeydown)
+})
+
+// 移动端抽屉：产品分组用手风琴（点击展开），其余链接直接导航。
+const mobileOpen = ref(false)
+const mobileProductsOpen = ref(false)
+const hamburgerRef = ref(null)
+
+function openMobile() {
+  mobileOpen.value = true
+}
+
+function closeMobile() {
+  mobileOpen.value = false
+}
+
+function onKeydown(e) {
+  if (e.key === 'Escape' && mobileOpen.value) {
+    closeMobile()
+    nextTick(() => hamburgerRef.value?.focus())
+  }
+}
+
+// 路由变化时关闭抽屉（点击抽屉内 RouterLink 触发导航后）。
+watch(
+  () => route.fullPath,
+  () => {
+    mobileOpen.value = false
+  },
+)
 
 const year = new Date().getFullYear()
 </script>
@@ -94,8 +126,79 @@ const year = new Date().getFullYear()
           <TqButton :href="agentUrl" variant="ghost" size="md">试用 Agent</TqButton>
           <TqButton :href="studioUrl" variant="primary" size="md">打开 Studio</TqButton>
         </div>
+
+        <button
+          ref="hamburgerRef"
+          type="button"
+          class="hamburger"
+          :class="{ active: mobileOpen }"
+          :aria-expanded="mobileOpen"
+          aria-controls="mobile-drawer"
+          aria-label="打开菜单"
+          @click="mobileOpen ? closeMobile() : openMobile()"
+        >
+          <span class="hamburger-box" aria-hidden="true">
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+          </span>
+        </button>
       </div>
     </header>
+
+    <!-- 移动端抽屉：与桌面导航同源数据，产品用手风琴展开 -->
+    <Transition name="drawer">
+      <div v-if="mobileOpen" class="drawer-overlay" @click.self="closeMobile">
+        <aside id="mobile-drawer" class="mobile-drawer" role="dialog" aria-label="站点导航" @click.stop>
+          <button type="button" class="drawer-close" aria-label="关闭菜单" @click="closeMobile">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            class="drawer-section-trigger"
+            :class="{ open: mobileProductsOpen }"
+            :aria-expanded="mobileProductsOpen"
+            @click="mobileProductsOpen = !mobileProductsOpen"
+          >
+            产品
+            <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <div class="drawer-sub" v-show="mobileProductsOpen">
+            <RouterLink to="/products" class="drawer-link" @click="closeMobile">全部产品</RouterLink>
+            <RouterLink
+              v-for="p in products"
+              :key="p.slug"
+              :to="`/products/${p.slug}`"
+              class="drawer-link"
+              @click="closeMobile"
+            >
+              <span class="dd-name">{{ p.name }}</span>
+              <span class="dd-tag">{{ p.tagline }}</span>
+            </RouterLink>
+          </div>
+
+          <RouterLink
+            v-for="l in links"
+            :key="l.to"
+            :to="l.to"
+            class="drawer-link single"
+            @click="closeMobile"
+          >
+            {{ l.label }}
+          </RouterLink>
+
+          <div class="drawer-cta">
+            <TqButton :href="agentUrl" variant="ghost" size="md" @click="closeMobile">试用 Agent</TqButton>
+            <TqButton :href="studioUrl" variant="primary" size="md" @click="closeMobile">打开 Studio</TqButton>
+          </div>
+        </aside>
+      </div>
+    </Transition>
 
     <main class="site-main">
       <RouterView v-slot="{ Component }">
@@ -284,6 +387,193 @@ const year = new Date().getFullYear()
   display: flex;
   align-items: center;
   gap: $space-2;
+}
+
+// 汉堡按钮：桌面隐藏，≤820px 显示
+.hamburger {
+  display: none;
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid $border-paper;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  color: $text-paper-primary;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s $ease, border-color 0.15s $ease;
+
+  &:hover {
+    background: #fff;
+    border-color: $border-paper;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--brand, #2563eb);
+    outline-offset: 2px;
+  }
+
+  .hamburger-box {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 18px;
+  }
+  .hamburger-line {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: currentColor;
+    border-radius: 2px;
+    transition: transform 0.2s $ease, opacity 0.2s $ease;
+  }
+  &.active {
+    .hamburger-line:nth-child(1) {
+      transform: translateY(6px) rotate(45deg);
+    }
+    .hamburger-line:nth-child(2) {
+      opacity: 0;
+    }
+    .hamburger-line:nth-child(3) {
+      transform: translateY(-6px) rotate(-45deg);
+    }
+  }
+}
+
+@media (max-width: 820px) {
+  .nav-links,
+  .nav-cta {
+    display: none;
+  }
+  .hamburger {
+    display: inline-flex;
+  }
+}
+
+// 移动端抽屉
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.mobile-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(86vw, 360px);
+  background: $bg-paper;
+  border-left: 1px solid $border-paper;
+  box-shadow: $shadow-lg;
+  padding: 20px 18px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.drawer-close {
+  align-self: flex-end;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  border: none;
+  background: transparent;
+  color: $text-paper-secondary;
+  cursor: pointer;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  &:hover {
+    background: $bg-paper-elevated;
+    color: $text-paper-primary;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--brand, #2563eb);
+    outline-offset: 2px;
+  }
+}
+
+.drawer-section-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 6px;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: $text-paper-primary;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid $border-paper;
+  .chevron {
+    transition: transform 0.2s $ease;
+    opacity: 0.7;
+  }
+  &.open .chevron {
+    transform: rotate(180deg);
+  }
+}
+
+.drawer-sub {
+  display: flex;
+  flex-direction: column;
+  padding-left: 6px;
+  border-bottom: 1px solid $border-paper;
+}
+
+.drawer-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 6px;
+  text-decoration: none;
+  color: $text-paper-primary;
+  font-size: 15px;
+  border-bottom: 1px solid $border-paper;
+  &:last-child {
+    border-bottom: none;
+  }
+  &.single {
+    font-weight: 500;
+  }
+  .dd-tag {
+    font-size: 12.5px;
+    color: $text-paper-secondary;
+    font-weight: 400;
+  }
+}
+
+.drawer-cta {
+  margin-top: auto;
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+// 抽屉进出动画
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.2s $ease;
+  .mobile-drawer {
+    transition: transform 0.25s $ease;
+  }
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+  .mobile-drawer {
+    transform: translateX(100%);
+  }
 }
 
 .site-nav.transparent {

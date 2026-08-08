@@ -12,7 +12,7 @@
     "build": "npm run build -w @trendquant/terminal",
     "build:web": "npm run build -w @trendquant/web",
     "build:all": "npm run build -w @trendquant/web && npm run build -w @trendquant/terminal",
-    "test:unit": "npm run test:unit -w @trendquant/terminal",
-    "check": "npm run check -w @trendquant/terminal"
+    "test:unit": "npm run test:unit -w @trendquant/terminal && npm run test:unit -w @trendquant/web",
+    "check": "npm run check -w @trendquant/terminal && npm run check -w @trendquant/web"
   }
 }

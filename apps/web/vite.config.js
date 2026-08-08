@@ -6,8 +6,9 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
-    // 本地开发 base='/'；GitHub Pages 默认部署在 /trend_quant/ 子路径，可用 VITE_PUBLIC_BASE 覆盖
-    base: env.VITE_PUBLIC_BASE || (process.env.NODE_ENV === 'production' ? '/trend_quant/' : '/'),
+    // 本地开发 base='/'；生产 web 占据站点根（terminal 迁至 /terminal/ 子路径），
+    // 可用 VITE_PUBLIC_BASE 覆盖（注意根路径不能与终端重叠）
+    base: env.VITE_PUBLIC_BASE || '/',
     plugins: [vue()],
     resolve: {
       alias: {
