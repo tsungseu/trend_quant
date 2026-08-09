@@ -14,6 +14,7 @@
   "dependencies": {
     "@trendquant/design-tokens": "0.1.0",
     "@trendquant/ui": "0.1.0",
+    "@trendquant/rag-client": "0.1.0",
     "echarts": "^5.5.1",
     "pinia": "^2.2.4",
     "vue": "^3.5.12",

@@ -137,3 +137,71 @@ src/
 ## 功能模块
 
 资产总览 · 行情看盘(K线/分时) · 量化策略(含回测) · 持仓与交易 · 基金量化(模型观察 + 价格提醒) · 预警中心 · AI 投顾 · 回测编辑器 · 资讯流 · 深/浅双主题切换
+
+## Phase 3 · 知识库 RAG（MindQuant Agent）
+
+为 AI 投顾增加"知识库"能力：用户可上传 PDF / 纯文本 / 图片（OCR）/ 网页 URL，后端解析切块嵌入向量库，提问时检索相关片段拼进 prompt，回答带来源引用。
+
+### 架构
+
+- `apps/api`：Fastify + TypeScript 后端（Fly.io 部署）。鉴权、文档摄入、向量检索、RAG 对话流。
+- `apps/admin`：知识库管理台（文档列表 / 状态 / 删除）。
+- `packages/rag-client`：终端与管理台共用的类型化 fetch 客户端。
+- 向量库：Qdrant（按用户隔离集合 `kb_<userId>`），本地用 `infra/docker-compose.yml` 起容器。
+- Embedding：OpenAI `text-embedding-3-small`，仅后端调用。
+
+### 本地开发
+
+```bash
+# 1. 起本地 Qdrant + MinIO（需要 Docker）
+docker compose -f infra/docker-compose.yml up -d
+
+# 2. 配置 apps/api/.env（至少 OPENAI_API_KEY；CLERK_SECRET_KEY 缺失时自动进入 dev fake 鉴权）
+cp apps/api/.env.example apps/api/.env
+
+# 3. 起后端
+npm run dev:api                 # http://localhost:8080
+
+# 4. 起前端（另开终端），并指向后端
+VITE_RAG_API_URL=http://localhost:8080 npm run dev:terminal
+```
+
+打开投顾页，顶部出现「📚 知识库」开关与「＋上传」。开关默认禁用——需要 `VITE_RAG_API_URL` 与登录 token 就绪（真实 Clerk 登录后由 auth store 注入；本地可临时设 `window.__TQ_RAG_TOKEN__` 测试）。开关关闭时走原 LLM 直连链路，知识库**永不阻断**普通对话。
+
+### 关键环境变量
+
+| 变量 | 位置 | 说明 |
+|------|------|------|
+| `OPENAI_API_KEY` | apps/api | embedding + chat（必填，否则摄入/检索报错） |
+| `QDRANT_URL` / `QDRANT_API_KEY` | apps/api | 本地默认 `http://localhost:6333`；云端填 Qdrant Cloud URL |
+| `CLERK_SECRET_KEY` | apps/api | 鉴权；本地缺失则 dev fake 模式（userId=dev-local-user） |
+| `S3_*` | apps/api | 原始上传文件存储（本地 MinIO 或 S3/R2） |
+| `VITE_RAG_API_URL` | apps/terminal / apps/admin | 前端指向后端的地址 |
+
+### 安全约束
+
+- **租户隔离**（最高优先级）：Qdrant 集合名从 `userId` 派生并校验 `[A-Za-z0-9_.-]`；所有读写显式带 `userId`，跨用户读写不可能。有专门单测断言用户 A 无法读取/篡改/删除用户 B 的数据。
+- **SSRF 防护**：网页 URL 摄取拒绝 localhost / 内网 / 回环 / 链路本地（含云元数据 `169.254.169.254`）及非 http 协议；10s 超时、5MB 上限。
+- **密钥不外泄**：后端日志 redact `authorization`/`cookie`；LLM/embedding 密钥只在请求内存活，不入库不入日志。
+- **OCR 质量提示**：tesseract 中文扫描件识别有限，结果标记 `lowConfidence`，前端与管理台给出提示。
+
+### 部署（apps/api）
+
+```bash
+cd apps/api
+fly deploy --config fly.toml --dockerfile Dockerfile
+```
+
+部署前务必配置真实的 `CLERK_SECRET_KEY`、`QDRANT_URL`、`OPENAI_API_KEY` 与 `S3_*`。健康探针：`GET /health`。
+
+### 验证
+
+```bash
+npm run test -w @trendquant/api          # 后端单测（含租户隔离、SSRF、SSE 解析）
+npm run test -w @trendquant/rag-client   # 共享客户端
+npm run test:unit -w @trendquant/terminal # 投顾（含 KB 开关三种状态）
+npm run build -w @trendquant/api         # tsc 类型检查
+npm run build -w @trendquant/admin       # 管理台构建
+```
+
+> 需要真实 Qdrant 容器的集成测试位于 `apps/api/test/integration/`，默认 vitest 运行排除；CI 增加 Qdrant service container 后自动纳入。
