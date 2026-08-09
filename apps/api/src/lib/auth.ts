@@ -23,10 +23,14 @@ const FAKE_DEV_USER = 'dev-local-user'
 
 /**
  * 鉴权 hook：校验 Bearer JWT，填充 req.auth.userId。
- * 本地开发（CLERK_SECRET_KEY 缺失 + NODE_ENV=development）使用 fake 模式。
+ * 本地开发（非生产 + CLERK_SECRET_KEY 缺失）使用 fake 模式。
+ *
+ * 注意：NODE_ENV 未设置时也视为开发环境（dev server 常不设该变量），
+ * 仅生产（NODE_ENV=production）才强制真实校验。
  */
 export async function authHook(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const devFake = process.env.NODE_ENV === 'development' && !process.env.CLERK_SECRET_KEY
+  const isProduction = process.env.NODE_ENV === 'production'
+  const devFake = !isProduction && !process.env.CLERK_SECRET_KEY
 
   if (devFake) {
     req.auth = { userId: FAKE_DEV_USER }
