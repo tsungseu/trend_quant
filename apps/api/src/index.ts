@@ -9,6 +9,7 @@ import { healthRoutes } from './routes/health.js'
 import { kbRoutes } from './routes/kb.js'
 import { queryRoutes } from './routes/query.js'
 import { chatRoutes } from './routes/chat.js'
+import { consoleRoutes } from './routes/console.js'
 
 async function main() {
   const app = Fastify({
@@ -41,6 +42,7 @@ async function main() {
   await app.register(kbRoutes)
   await app.register(queryRoutes)
   await app.register(chatRoutes)
+  await app.register(consoleRoutes)
 
   // KB / chat 路由在后续 PR 注册；此处先占位，确认骨架可启动
   app.get('/_version', async () => ({ version: '0.1.0', phase: 'scaffold' }))

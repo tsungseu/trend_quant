@@ -3,8 +3,8 @@ import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
 
-// 策略/基金列表项在详情子路由下也需高亮，其余导航项保持精确匹配
-const NESTED_PREFIXES = ['/app/strategies', '/app/funds']
+// 策略/基金列表项在详情子路由下也需高亮；网关子页让概览项高亮
+const NESTED_PREFIXES = ['/app/strategies', '/app/funds', '/app/gateway']
 function isActive(to) {
   if (route.path === to) return true
   return NESTED_PREFIXES.includes(to) && route.path.startsWith(`${to}/`)
@@ -36,6 +36,16 @@ const groups = [
       { to: '/app/alerts', label: '预警', icon: 'alert', badge: true },
       { to: '/app/advisor', label: '投顾', icon: 'advisor' },
       { to: '/app/backtest', label: '回测', icon: 'backtest' },
+    ],
+  },
+  {
+    key: 'gateway',
+    label: '模型网关',
+    items: [
+      { to: '/app/gateway', label: '概览', icon: 'gateway' },
+      { to: '/app/gateway/keys', label: 'API Key', icon: 'key' },
+      { to: '/app/gateway/usage', label: '用量', icon: 'usage' },
+      { to: '/app/gateway/wallet', label: '钱包', icon: 'wallet' },
     ],
   },
   {
@@ -124,6 +134,14 @@ export const icons = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
   data:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>',
+  gateway:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+  key:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/></svg>',
+  usage:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-7"/></svg>',
+  wallet:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4z"/></svg>',
 }
 </script>
 

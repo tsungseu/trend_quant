@@ -81,6 +81,31 @@ export function buildRoutes() {
       meta: { title: '数据中心' },
     },
 
+    {
+      path: '/app/gateway',
+      name: 'gateway-overview',
+      component: () => import('@/views/GatewayOverviewView.vue'),
+      meta: { title: '模型网关 · 概览' },
+    },
+    {
+      path: '/app/gateway/keys',
+      name: 'gateway-keys',
+      component: () => import('@/views/ComingSoonView.vue'),
+      meta: { title: '模型网关 · API Key' },
+    },
+    {
+      path: '/app/gateway/usage',
+      name: 'gateway-usage',
+      component: () => import('@/views/ComingSoonView.vue'),
+      meta: { title: '模型网关 · 用量' },
+    },
+    {
+      path: '/app/gateway/wallet',
+      name: 'gateway-wallet',
+      component: () => import('@/views/ComingSoonView.vue'),
+      meta: { title: '模型网关 · 钱包' },
+    },
+
     // 旧路径重定向（无 /app 前缀）
     { path: '/', redirect: '/app' },
     { path: '/market', redirect: '/app/market' },
