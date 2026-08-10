@@ -30,7 +30,7 @@ export class RagClient {
   constructor(opts: RagClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '')
     this.getToken = opts.getToken
-    this.fetchImpl = opts.fetchImpl ?? fetch
+    this.fetchImpl = opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
   }
 
   private async authedHeaders(extra: Record<string, string> = {}): Promise<HeadersInit> {

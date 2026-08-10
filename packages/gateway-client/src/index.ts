@@ -35,7 +35,8 @@ export class GatewayClient {
     // 真实网关优先；未配置则用 mock 兜底
     this.baseUrl = this.realBaseUrl || this.fallbackBaseUrl
     this.getToken = opts.getToken
-    this.fetchImpl = opts.fetchImpl ?? fetch
+    // 绑定到 globalThis，避免作为方法引用时出现 Illegal invocation
+    this.fetchImpl = opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
   }
 
   /** 当前是否指向真实网关（false = 走 apps/api mock，UI 可提示"演示数据"） */
