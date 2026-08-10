@@ -90,19 +90,19 @@ export function buildRoutes() {
     {
       path: '/app/gateway/keys',
       name: 'gateway-keys',
-      component: () => import('@/views/ComingSoonView.vue'),
+      component: () => import('@/views/GatewayKeysView.vue'),
       meta: { title: '模型网关 · API Key' },
     },
     {
       path: '/app/gateway/usage',
       name: 'gateway-usage',
-      component: () => import('@/views/ComingSoonView.vue'),
+      component: () => import('@/views/GatewayUsageView.vue'),
       meta: { title: '模型网关 · 用量' },
     },
     {
       path: '/app/gateway/wallet',
       name: 'gateway-wallet',
-      component: () => import('@/views/ComingSoonView.vue'),
+      component: () => import('@/views/GatewayWalletView.vue'),
       meta: { title: '模型网关 · 钱包' },
     },
 

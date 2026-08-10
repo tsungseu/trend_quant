@@ -3,8 +3,8 @@ import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
 
-// 策略/基金列表项在详情子路由下也需高亮；网关子页让概览项高亮
-const NESTED_PREFIXES = ['/app/strategies', '/app/funds', '/app/gateway']
+// 策略/基金列表项在详情子路由下也需高亮；网关四页各自精确匹配，不把子页算进概览
+const NESTED_PREFIXES = ['/app/strategies', '/app/funds']
 function isActive(to) {
   if (route.path === to) return true
   return NESTED_PREFIXES.includes(to) && route.path.startsWith(`${to}/`)
