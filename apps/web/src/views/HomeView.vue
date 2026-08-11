@@ -1,7 +1,18 @@
 <script setup>
 import { TqButton } from '@trendquant/ui'
 import { terminalUrl as studioUrl } from '@/data/terminal'
+import CapabilityGrid from '@/components/CapabilityGrid.vue'
+import GrowthBand from '@/components/GrowthBand.vue'
+import TrustStrip from '@/components/TrustStrip.vue'
+
 const agentUrl = `${studioUrl.replace(/\/$/, '')}/advisor`
+
+// 英雄区能力分点（对标 BigQuant slogan 下的能力概览）
+const heroPoints = [
+  'AI 投研对话，把问题说清楚',
+  '量化回测与归因，把研究做扎实',
+  '研究到执行同一套事实，可追溯',
+]
 
 // 浅色内容区：两条产品线叙事
 const pillars = [
@@ -24,15 +35,24 @@ const pillars = [
 
 <template>
   <div class="home">
-    <!-- 深色全幅英雄区 -->
+    <!-- 1. 深色全幅英雄区 -->
     <section class="hero">
       <div class="hero-atmos" aria-hidden="true"></div>
       <div class="mkt-container hero-inner">
         <p class="hero-brand">TrendQuant · 趋势量化</p>
         <h1 class="hero-title">可靠的量化投研系统，<br />服务关键决策</h1>
         <p class="hero-support">
-          TrendQuant 旗下 MindQuant Agent 与 Studio：AI 投研对话与量化终端一体叙事——冷静、可追溯、为长期决策而建。
+          以 AI 赋能投研，为投资者提供对话式投研、量化回测与策略研究的一体化平台——
+          冷静、可追溯、为长期决策而建。
         </p>
+        <ul class="hero-points">
+          <li v-for="p in heroPoints" :key="p">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            <span>{{ p }}</span>
+          </li>
+        </ul>
         <div class="hero-cta">
           <TqButton :href="studioUrl" variant="primary" size="lg">打开 Studio</TqButton>
           <TqButton :href="agentUrl" variant="secondary" size="lg">试用 Agent</TqButton>
@@ -40,7 +60,13 @@ const pillars = [
       </div>
     </section>
 
-    <!-- 浅色纸感内容区：产品线 -->
+    <!-- 2. 核心能力宫格 -->
+    <CapabilityGrid />
+
+    <!-- 3. 增值服务条 -->
+    <GrowthBand />
+
+    <!-- 4. 浅色纸感内容区：产品线 -->
     <section class="mkt-section pillars">
       <div class="mkt-container">
         <p class="mkt-eyebrow">产品线</p>
@@ -65,7 +91,10 @@ const pillars = [
       </div>
     </section>
 
-    <!-- 收尾 CTA -->
+    <!-- 5. 信任条 -->
+    <TrustStrip />
+
+    <!-- 6. 收尾 CTA -->
     <section class="closing">
       <div class="mkt-container closing-inner">
         <h2 class="closing-title">把关键决策，建立在可靠系统之上。</h2>
@@ -145,10 +174,40 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
 
 .hero-support {
   margin-top: 28px;
-  max-width: 46ch;
+  max-width: 52ch;
   font-size: clamp(16px, 1.5vw, 20px);
   line-height: 1.6;
   color: $hero-text-secondary;
+}
+
+// 英雄区能力分点
+.hero-points {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-3 $space-6;
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+    font-weight: 500;
+    color: rgba(230, 235, 245, 0.88);
+
+    svg {
+      color: #60a5fa;
+      flex-shrink: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: $space-2;
+  }
 }
 
 .hero-cta {
@@ -156,30 +215,6 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   display: flex;
   gap: $space-4;
   flex-wrap: wrap;
-}
-
-// 深色英雄区上的次级按钮（内部路由，反色描边样式）
-.hero-ghost-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 0 24px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  font-family: $font-display;
-  font-size: 15px;
-  font-weight: 600;
-  transition:
-    background-color 0.15s $ease,
-    border-color 0.15s $ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
 }
 
 // ---- 浅色能力线 ----
