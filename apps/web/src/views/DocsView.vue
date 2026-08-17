@@ -14,7 +14,7 @@ const activeSection = computed(() => route.params.section || '')
         <p class="mkt-eyebrow">知识库</p>
         <h1 class="page-title">理解方法，而不只是使用工具</h1>
         <p class="page-sub">
-          从上手教程到策略背后的假设，再到接入 API——让每一步研究都能被检验、被复用。
+          从上手教程到策略背后的假设，再到接入 API，让每一步研究都能被检验、被复用。
         </p>
       </div>
     </header>

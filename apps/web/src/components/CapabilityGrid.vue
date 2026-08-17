@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import { coreCapabilities } from '@/data/catalog'
 
 // 可选 props：limit 用于在产品页只展示前 N 张，section 标题副标可覆盖。
+// eyebrow 默认为空：眉标是稀缺装饰（每 3 节最多 1 个），仅产品页显式传入。
 const props = defineProps({
   limit: { type: Number, default: 0 },
-  eyebrow: { type: String, default: '核心能力' },
+  eyebrow: { type: String, default: '' },
   heading: { type: String, default: '一套平台，覆盖投研到执行的关键环节' },
 })
 
@@ -25,15 +26,19 @@ const icons = {
 <template>
   <section class="mkt-section capability-section">
     <div class="mkt-container">
-      <p class="mkt-eyebrow">{{ eyebrow }}</p>
+      <p v-if="eyebrow" class="mkt-eyebrow">{{ eyebrow }}</p>
       <h2 class="section-head">{{ heading }}</h2>
 
       <ul class="cap-grid">
-        <li v-for="(c, i) in items" :key="c.title" class="cap-card">
+        <li
+          v-for="(c, i) in items"
+          :key="c.title"
+          class="cap-card"
+          :class="{ lead: i === 0 }"
+        >
           <span class="cap-icon" v-html="icons[c.icon]" aria-hidden="true"></span>
           <h3 class="cap-title">{{ c.title }}</h3>
           <p class="cap-line">{{ c.line }}</p>
-          <span class="cap-index">{{ String(i + 1).padStart(2, '0') }}</span>
         </li>
       </ul>
     </div>
@@ -90,6 +95,14 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   }
 }
 
+// 首卡作为主卡：品牌色浸染背景，打破等宽卡阵的模板感
+.cap-card.lead {
+  background:
+    linear-gradient(180deg, var(--brand-soft) 0%, rgba(37, 99, 235, 0.03) 62%),
+    $bg-paper-elevated;
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
 .cap-icon {
   width: 40px;
   height: 40px;
@@ -120,16 +133,5 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   line-height: 1.65;
   color: $text-paper-secondary;
   flex: 1;
-}
-
-.cap-index {
-  position: absolute;
-  top: 24px;
-  right: 26px;
-  font-family: $font-display;
-  font-size: 13px;
-  font-weight: 600;
-  color: $text-paper-tertiary;
-  letter-spacing: 0.04em;
 }
 </style>

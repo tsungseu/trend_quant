@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/space-grotesk": "^5.3.0",
     "@trendquant/design-tokens": "0.1.0",
     "@trendquant/ui": "0.1.0",
     "vue": "^3.5.12",
