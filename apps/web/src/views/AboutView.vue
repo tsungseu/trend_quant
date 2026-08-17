@@ -13,7 +13,7 @@ const principles = [
   },
   {
     title: '把决策留给人',
-    line: 'Agent 辅助分析，Studio 负责验证与提醒，关键动作保留人工关口——工具不替你下判断。',
+    line: 'Agent 辅助分析，Studio 负责验证与提醒，关键动作保留人工关口，工具不替你下判断。',
   },
 ]
 </script>
@@ -27,7 +27,7 @@ const principles = [
         <p class="page-blurb">
           TrendQuant（趋势量化）提供 MindQuant Agent（AI 投研）与 MindQuant Studio（量化交易终端）。
           我们把对话投研与终端作业收敛到同一套事实之上，让专业投研既高效又可追溯。
-          好的工具应当克制——放大你的判断，而不是替你做判断。
+          好的工具应当克制：放大你的判断，而不是替你做判断。
         </p>
       </div>
     </header>

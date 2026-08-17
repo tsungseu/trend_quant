@@ -1,0 +1,71 @@
+@use '@trendquant/design-tokens/tokens.scss' as *;
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: $bg-base;
+  color: $text-primary;
+}
+
+.admin-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: $space-4;
+  padding: 0 $space-6;
+  border-bottom: 1px solid $border-subtle;
+  background: $bg-panel;
+
+  .brand {
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .brand-sub {
+    font-size: 12px;
+    color: $text-tertiary;
+  }
+}
+
+.admin-main {
+  flex: 1;
+  padding: $space-6;
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid $border-subtle;
+  }
+  th {
+    font-weight: 600;
+    color: $text-secondary;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &.indexed { background: $down-bg; color: $down; }
+  &.pending, &.parsing, &.embedding { background: $brand-soft; color: $brand; }
+  &.failed { background: $up-bg; color: $up; }
+}

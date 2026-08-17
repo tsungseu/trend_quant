@@ -1,0 +1,29 @@
+# Fly.io 部署配置（apps/api）
+# 使用：fly deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile
+# 注意：Fly 从仓库根构建，Dockerfile 内已处理路径。
+
+app = "trendquant-api"
+primary_region = "nrt" # 东京，亚太延迟较低；按需调整
+
+[build]
+  dockerfile = "apps/api/Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
+
+# 健康探针：Fly 据此判断实例是否就绪
+[[http_service.checks]]
+  interval = "20s"
+  timeout = "3s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/health"

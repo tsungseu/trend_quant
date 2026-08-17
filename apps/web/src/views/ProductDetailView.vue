@@ -3,13 +3,15 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { TqButton } from '@trendquant/ui'
 import { getProduct, products } from '@/data/catalog'
-import { terminalUrl as studioBase } from '@/data/terminal'
+import { agentUrl, terminalUrl as studioBase } from '@/data/terminal'
 
 const route = useRoute()
 
 const product = computed(() => getProduct(route.params.slug))
 
 function productCtaHref(p) {
+  // 站内路由（如 Agent 对话页）直接使用，其余拼接到 Studio 终端
+  if (p?.ctaInternal && p?.ctaPath) return agentUrl
   const base = studioBase.replace(/\/$/, '')
   const path = p?.ctaPath || ''
   if (!path) return base
