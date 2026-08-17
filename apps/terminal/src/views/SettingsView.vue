@@ -4,25 +4,28 @@ import { useLlmStore } from '@/stores/llm'
 import { usePrefsStore } from '@/stores/prefs'
 import { useThemeStore } from '@/stores/theme'
 import { LLM_FORMATS } from '@/utils/storage'
+import { dataModeLabel, isDemoMode } from '@/config/runtime'
 
 // ============ 左侧分组导航 ============
+// Agent 语境的设置（思考过程/待办/命令行/任务归档/内置浏览器）已随产品边界
+// 移至 MindQuant Agent 独立页；本页只保留终端与研究相关的分组。
 const groups = [
-  { key: 'general', label: '常规', icon: 'general' },
   { key: 'appearance', label: '外观', icon: 'appearance' },
+  { key: 'data', label: '数据', icon: 'data' },
   { key: 'model', label: '模型设置', icon: 'model' },
-  { key: 'browser', label: '浏览器', icon: 'browser' },
+  { key: 'app', label: '应用', icon: 'general' },
 ]
-const active = ref('general')
+const active = ref('appearance')
 
 const navIcons = {
   general:
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
   appearance:
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>',
+  data:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>',
   model:
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 013 3v1a3 3 0 01-6 0V5a3 3 0 013-3z"/><path d="M5 21v-2a7 7 0 0114 0v2"/></svg>',
-  browser:
-    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 7h20M8 21l-2-4M16 21l2-4"/></svg>',
 }
 
 const store = useLlmStore()
@@ -30,55 +33,34 @@ const prefsStore = usePrefsStore()
 const prefs = prefsStore.prefs
 const theme = useThemeStore()
 
-// ============ 常规 ============
+// ============ 应用（全局）============
 const general = reactive({
   uiLanguage: prefs.uiLanguage,
-  terminalShell: prefs.terminalShell,
-  terminalFont: prefs.terminalFont,
   httpProxy: prefs.httpProxy,
   proxyBypass: prefs.proxyBypass,
   customCa: prefs.customCa,
   chromeAcceleration: prefs.chromeAcceleration,
   previewBuilds: prefs.previewBuilds,
   autoUpdate: prefs.autoUpdate,
-  taskNotify: prefs.taskNotify,
-  notifySound: prefs.notifySound,
   closeToTray: prefs.closeToTray,
-  showThinking: prefs.showThinking,
-  showTodo: prefs.showTodo,
-  autoArchive: prefs.autoArchive,
-  archiveDays: prefs.archiveDays,
   dataPath: prefs.dataPath,
-  optimizeExperience: prefs.optimizeExperience,
 })
 
 // 同步常规表单到 store
 function commitGeneral() {
   prefsStore.update({ ...general })
 }
-function watchGeneral() {}
 
 const languages = [
   { value: 'system', label: '系统默认' },
   { value: 'zh-CN', label: '简体中文' },
   { value: 'en', label: 'English' },
 ]
-const shells = [
-  { value: 'auto', label: '自动选择' },
-  { value: 'bash', label: 'Git Bash' },
-  { value: 'cmd', label: 'cmd.exe' },
-  { value: 'powershell', label: 'PowerShell' },
-]
 
 // ============ 外观 ============
 const appearance = reactive({
   mode: theme.mode,
   fontScale: prefs.fontScale,
-  codeThemeLight: prefs.codeThemeLight,
-  codeThemeDark: prefs.codeThemeDark,
-  showLineNumbers: prefs.showLineNumbers,
-  softWrap: prefs.softWrap,
-  codeFontSize: prefs.codeFontSize,
 })
 
 function setThemeMode(m) {
@@ -88,11 +70,6 @@ function setThemeMode(m) {
 function commitAppearance() {
   prefsStore.update({
     fontScale: appearance.fontScale,
-    codeThemeLight: appearance.codeThemeLight,
-    codeThemeDark: appearance.codeThemeDark,
-    showLineNumbers: appearance.showLineNumbers,
-    softWrap: appearance.softWrap,
-    codeFontSize: appearance.codeFontSize,
   })
 }
 
@@ -253,25 +230,6 @@ async function validateBaseUrl(url) {
     return true // 校验工具不可用时放行（最终由 streamChat 兜底拦截）
   }
 }
-
-// ============ 浏览器 ============
-const browser = reactive({
-  browserControl: prefs.browserControl,
-})
-
-function commitBrowser() {
-  prefsStore.update({ browserControl: browser.browserControl })
-}
-function clearBrowserCache() {
-  // 占位：演示环境无内置浏览器，仅提示
-  browserMsg.value = '已清除内置浏览器 HTTP 缓存（演示环境为占位操作）'
-}
-function clearAllBrowserData() {
-  browserMsg.value = '已删除内置浏览器全部数据（演示环境为占位操作，不可撤销）'
-}
-const browserMsg = ref('')
-
-onUnmounted(() => {})
 </script>
 
 <template>
@@ -293,9 +251,10 @@ onUnmounted(() => {})
 
     <!-- 右侧内容 -->
     <div class="settings-content">
-      <!-- 常规 -->
-      <section v-if="active === 'general'" class="settings-section">
-        <h3 class="section-title">常规</h3>
+      <!-- 应用（全局，同时作用于 MindQuant Agent） -->
+      <section v-if="active === 'app'" class="settings-section">
+        <h3 class="section-title">应用</h3>
+        <p class="section-note">以下为应用级设置，对 Studio 终端与 MindQuant Agent 同时生效。</p>
 
         <!-- 通用 -->
         <div class="card">
@@ -308,62 +267,6 @@ onUnmounted(() => {})
             <select v-model="general.uiLanguage" class="sr-control" @change="commitGeneral">
               <option v-for="l in languages" :key="l.value" :value="l.value">{{ l.label }}</option>
             </select>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">显示思考过程</div>
-              <div class="sr-desc">在消息流中展示完整的模型思考内容；关闭时每轮仍展示第一次思考。</div>
-            </div>
-            <button class="switch" :class="{ on: general.showThinking }" @click="general.showThinking = !general.showThinking; commitGeneral()"><span class="knob"></span></button>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">显示待办</div>
-              <div class="sr-desc">在消息流中展示待办卡片。</div>
-            </div>
-            <button class="switch" :class="{ on: general.showTodo }" @click="general.showTodo = !general.showTodo; commitGeneral()"><span class="knob"></span></button>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">优化体验</div>
-              <div class="sr-desc">允许我们将你的对话内容用于优化使用体验。我们保障你的数据隐私安全。</div>
-            </div>
-            <button class="switch" :class="{ on: general.optimizeExperience }" @click="general.optimizeExperience = !general.optimizeExperience; commitGeneral()"><span class="knob"></span></button>
-          </div>
-        </div>
-
-        <!-- 命令行环境 -->
-        <div class="card">
-          <div class="card-title">命令行环境</div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">继承系统命令行环境</div>
-              <div class="sr-desc">命令行运行时，尽量继承本机登录环境、代理与字体设置。</div>
-            </div>
-            <span class="sr-control muted">系统默认</span>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">命令行字体</div>
-              <div class="sr-desc">留空时自动探测系统配置；填写后作为本应用命令行的字体覆盖。</div>
-            </div>
-            <input v-model="general.terminalFont" class="sr-control" placeholder="留空自动继承，例如 MesloLGS NF, monospace" @change="commitGeneral" />
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">命令行 Shell</div>
-              <div class="sr-desc">仅新会话生效。Windows 下优先 Git Bash，找不到回退 cmd.exe。</div>
-            </div>
-            <select v-model="general.terminalShell" class="sr-control" @change="commitGeneral">
-              <option v-for="s in shells" :key="s.value" :value="s.value">{{ s.label }}</option>
-            </select>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">队列</div>
-              <div class="sr-desc">任务运行时，将后续操作加入队列，或在下一轮工具调用后再执行。</div>
-            </div>
-            <span class="sr-control muted">在运行时排队</span>
           </div>
         </div>
 
@@ -417,25 +320,6 @@ onUnmounted(() => {})
             </div>
             <button class="switch" :class="{ on: general.autoUpdate }" @click="general.autoUpdate = !general.autoUpdate; commitGeneral()"><span class="knob"></span></button>
           </div>
-        </div>
-
-        <!-- 通知 -->
-        <div class="card">
-          <div class="card-title">通知</div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">任务通知</div>
-              <div class="sr-desc">任务完成、失败或需要确认时发送桌面通知。</div>
-            </div>
-            <button class="switch" :class="{ on: general.taskNotify }" @click="general.taskNotify = !general.taskNotify; commitGeneral()"><span class="knob"></span></button>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">通知声音</div>
-              <div class="sr-desc">通知开启后，可单独关闭任务通知提示音。</div>
-            </div>
-            <button class="switch" :class="{ on: general.notifySound }" @click="general.notifySound = !general.notifySound; commitGeneral()"><span class="knob"></span></button>
-          </div>
           <div class="setting-row">
             <div class="sr-text">
               <div class="sr-label">关闭窗口时隐藏到托盘</div>
@@ -445,39 +329,15 @@ onUnmounted(() => {})
           </div>
         </div>
 
-        <!-- 数据与归档 -->
+        <!-- 数据 -->
         <div class="card">
-          <div class="card-title">数据与归档</div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">自动归档旧任务</div>
-              <div class="sr-desc">定时扫描最近打开过的工作区，将已完成、无未读、未置顶且超过保留期的任务自动归档。</div>
-            </div>
-            <button class="switch" :class="{ on: general.autoArchive }" @click="general.autoArchive = !general.autoArchive; commitGeneral()"><span class="knob"></span></button>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">归档保留时长</div>
-              <div class="sr-desc">任务最后更新时间早于该时长后，才会进入自动归档候选。</div>
-            </div>
-            <div class="sr-control inline">
-              <input type="number" min="1" max="90" v-model.number="general.archiveDays" @change="commitGeneral" />
-              <span class="unit">天后归档</span>
-            </div>
-          </div>
+          <div class="card-title">数据</div>
           <div class="setting-row">
             <div class="sr-text">
               <div class="sr-label">数据存储路径</div>
               <div class="sr-desc">应用数据的根目录，修改后会将现有数据复制到新位置。</div>
             </div>
             <input v-model="general.dataPath" class="sr-control" placeholder="C:\Users\xucong" @change="commitGeneral" />
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">引导</div>
-              <div class="sr-desc">重新打开引导弹窗，查看迁移选项并导入设置。</div>
-            </div>
-            <button class="btn btn-ghost btn-sm" @click="browserMsg = ''">重新打开引导弹窗</button>
           </div>
         </div>
       </section>
@@ -507,58 +367,31 @@ onUnmounted(() => {})
             </div>
             <div class="sr-control inline">
               <input type="number" min="90" max="130" v-model.number="appearance.fontScale" @change="commitAppearance" />
-              <span class="unit">px</span>
+              <span class="unit">%</span>
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- 内容显示 -->
+      <!-- 数据 -->
+      <section v-if="active === 'data'" class="settings-section">
+        <h3 class="section-title">数据</h3>
+
         <div class="card">
-          <div class="card-title">内容显示</div>
+          <div class="card-title">行情数据源</div>
           <div class="setting-row">
             <div class="sr-text">
-              <div class="sr-label">浅色主题</div>
-              <div class="sr-desc">浅色界面下文本与内容的高亮主题。</div>
+              <div class="sr-label">数据模式</div>
+              <div class="sr-desc">由部署环境（VITE_DATA_MODE）决定：演示快照、本地直连或代理网关。</div>
             </div>
-            <select v-model="appearance.codeThemeLight" class="sr-control" @change="commitAppearance">
-              <option>GitHub Light</option>
-              <option>GitHub Light Default</option>
-              <option>Atom One Light</option>
-            </select>
+            <span class="sr-control muted">{{ dataModeLabel() }}</span>
           </div>
           <div class="setting-row">
             <div class="sr-text">
-              <div class="sr-label">深色主题</div>
-              <div class="sr-desc">深色界面下内容使用的高亮主题。</div>
+              <div class="sr-label">实时行情</div>
+              <div class="sr-desc">演示模式下使用历史快照，不会请求第三方接口，也不触发真实价格提醒。</div>
             </div>
-            <select v-model="appearance.codeThemeDark" class="sr-control" @change="commitAppearance">
-              <option>GitHub Dark</option>
-              <option>GitHub Dark Default</option>
-              <option>Atom One Dark</option>
-            </select>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">显示行号</div>
-              <div class="sr-desc">在内容和差异视图中显示行号。</div>
-            </div>
-            <button class="switch" :class="{ on: appearance.showLineNumbers }" @click="appearance.showLineNumbers = !appearance.showLineNumbers; commitAppearance()"><span class="knob"></span></button>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">长行自动换行</div>
-              <div class="sr-desc">内容过长时自动换行。</div>
-            </div>
-            <button class="switch" :class="{ on: appearance.softWrap }" @click="appearance.softWrap = !appearance.softWrap; commitAppearance()"><span class="knob"></span></button>
-          </div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">字号</div>
-              <div class="sr-desc">调整内容块、文件预览和差异视图的默认字号。</div>
-            </div>
-            <div class="sr-control inline">
-              <input type="number" min="10" max="20" v-model.number="appearance.codeFontSize" @change="commitAppearance" />
-            </div>
+            <span class="sr-control muted">{{ isDemoMode() ? '快照数据' : '真实数据' }}</span>
           </div>
         </div>
       </section>
@@ -673,40 +506,6 @@ onUnmounted(() => {})
         </div>
         <div v-if="testMsg" class="test-msg" :class="{ err: testMsg.startsWith('连接失败') }">{{ testMsg }}</div>
       </section>
-
-      <!-- 浏览器 -->
-      <section v-if="active === 'browser'" class="settings-section">
-        <h3 class="section-title">浏览器</h3>
-
-        <div class="card">
-          <div class="card-title">内置浏览器</div>
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">浏览器控制</div>
-              <div class="sr-desc">开启内置浏览器控制，让新会话可以通过内置浏览器访问和操作网页。</div>
-            </div>
-            <button class="switch" :class="{ on: browser.browserControl }" @click="browser.browserControl = !browser.browserControl; commitBrowser()"><span class="knob"></span></button>
-          </div>
-
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">清除内置浏览器缓存</div>
-              <div class="sr-desc">清除 HTTP 缓存、Cache Storage 和 Service Worker，保留 Cookie 和本地站点数据。</div>
-            </div>
-            <button class="btn btn-ghost btn-sm" @click="clearBrowserCache()">清除缓存</button>
-          </div>
-
-          <div class="setting-row">
-            <div class="sr-text">
-              <div class="sr-label">清除全部浏览器数据</div>
-              <div class="sr-desc">删除内置浏览器中的 Cookie、站点数据和缓存。此操作不可撤销。</div>
-            </div>
-            <button class="btn btn-ghost btn-sm danger" @click="clearAllBrowserData()">清除全部数据</button>
-          </div>
-        </div>
-
-        <div v-if="browserMsg" class="test-msg">{{ browserMsg }}</div>
-      </section>
     </div>
   </div>
 </template>
@@ -769,6 +568,11 @@ onUnmounted(() => {})
   font-size: 16px;
   font-weight: 700;
   margin: 0 0 $space-4 $space-1;
+}
+.section-note {
+  margin: -8px 0 20px $space-1;
+  font-size: 12.5px;
+  color: $text-tertiary;
 }
 // 分组卡片：承担视觉分组，section 仅作容器
 .card {

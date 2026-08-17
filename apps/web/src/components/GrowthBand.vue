@@ -6,17 +6,19 @@ import { growthResources } from '@/data/catalog'
   <section class="mkt-section growth-section">
     <div class="mkt-container">
       <div class="growth-head">
-        <div>
-          <p class="mkt-eyebrow">研究与成长</p>
-          <h2 class="section-head">不只是工具，更是一条可成长的研究路径</h2>
-        </div>
+        <h2 class="section-head">不只是工具，更是一条可成长的研究路径</h2>
         <p class="section-sub">
-          从零上手到沉淀方法论——配套教程、策略模板与衔接实盘的研究态，让每一步都能被复用。
+          从零上手到沉淀方法论：配套教程、策略模板与衔接实盘的研究态，让每一步都能被复用。
         </p>
       </div>
 
       <div class="growth-grid">
-        <div v-for="g in growthResources" :key="g.title" class="growth-card">
+        <div
+          v-for="(g, i) in growthResources"
+          :key="g.title"
+          class="growth-card"
+          :class="{ tinted: i === 1 }"
+        >
           <h3 class="growth-title">{{ g.title }}</h3>
           <p class="growth-line">{{ g.line }}</p>
           <RouterLink :to="g.href" class="growth-cta">
@@ -42,16 +44,11 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   border-bottom: 1px solid $border-paper;
 }
 
+// 标题与副文纵向堆叠（禁用「左大标题 + 右小段」分头布局）
 .growth-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: $space-8;
-  flex-wrap: wrap;
+  max-width: 640px;
 }
-
 .section-head {
-  margin-top: 14px;
   max-width: 22ch;
   font-size: clamp(24px, 3vw, 36px);
   font-weight: 600;
@@ -60,7 +57,8 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
 }
 
 .section-sub {
-  max-width: 40ch;
+  margin-top: 16px;
+  max-width: 52ch;
   font-size: 15.5px;
   line-height: 1.6;
   color: $text-paper-secondary;
@@ -89,6 +87,14 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   &:hover {
     border-color: $brand;
   }
+}
+
+// 中卡品牌色浸染，避免三张等价卡片的模板感
+.growth-card.tinted {
+  background:
+    linear-gradient(180deg, var(--brand-soft) 0%, rgba(37, 99, 235, 0.02) 58%),
+    $bg-paper;
+  border-color: rgba(37, 99, 235, 0.24);
 }
 
 .growth-title {

@@ -6,7 +6,6 @@ import { trustSignals } from '@/data/catalog'
   <section class="trust-section">
     <div class="trust-atmos" aria-hidden="true"></div>
     <div class="mkt-container trust-inner">
-      <p class="trust-eyebrow">专注量化投研</p>
       <h2 class="trust-head">为长期决策而建的投研系统</h2>
 
       <ul class="trust-grid">
@@ -43,8 +42,10 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(55% 70% at 82% 18%, rgba(59, 130, 246, 0.22) 0%, rgba(59, 130, 246, 0) 60%),
+    radial-gradient(55% 70% at 82% 8%, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0) 55%),
     repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.04) 0 1px, transparent 1px 88px);
+  // 向下淡出，避免与收尾区的渐变在接缝处形成亮度台阶
+  mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
 }
 
 .trust-inner {
@@ -52,17 +53,7 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
   z-index: 1;
 }
 
-.trust-eyebrow {
-  font-family: $font-display;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(130, 180, 255, 0.85);
-}
-
 .trust-head {
-  margin-top: 14px;
   max-width: 22ch;
   font-size: clamp(24px, 3vw, 38px);
   font-weight: 600;
@@ -117,6 +108,6 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
 .trust-note {
   margin-top: 36px;
   font-size: 12.5px;
-  color: rgba(154, 167, 194, 0.6);
+  color: rgba(154, 167, 194, 0.8);
 }
 </style>
