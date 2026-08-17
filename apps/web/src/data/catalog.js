@@ -14,7 +14,9 @@ export const products = [
       '与 MindQuant Studio 同一品牌工作流衔接',
     ],
     ctaLabel: '试用 Agent',
-    ctaPath: '/advisor',
+    // 站内路由：官网 /agent 独立对话页（不再跳 Studio 终端）
+    ctaPath: '/agent',
+    ctaInternal: true,
   },
   {
     slug: 'studio',
