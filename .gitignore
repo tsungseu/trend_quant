@@ -40,3 +40,9 @@ playwright-report/
 
 .superpowers/
 
+
+# 本地验证截图与技能安装工件
+gui-test-screenshots/
+.agents/
+.claude/
+skills-lock.json
