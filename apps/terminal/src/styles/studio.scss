@@ -1,0 +1,71 @@
+// Ant Design Pro-inspired palette, scoped to the Studio entry point.
+:root {
+  --sidebar-w: 224px;
+  --topbar-h: 64px;
+}
+[data-theme='light'] {
+  --bg-app: #f5f5f5;
+  --bg-base: #f5f5f5;
+  --bg-panel: #fff;
+  --bg-panel-2: #fafafa;
+  --bg-elevated: #fff;
+  --bg-hover: #f0f0f0;
+  --sidebar-bg: #fff;
+  --border-subtle: #f0f0f0;
+  --border-default: #d9d9d9;
+  --border-strong: #bfbfbf;
+  --text-primary: #1f1f1f;
+  --text-secondary: #595959;
+  --text-tertiary: #737373;
+  --brand: #1677ff;
+  --brand-hover: #0958d9;
+  --brand-soft: #e6f4ff;
+  --chart-label: #737373;
+  --chart-axis: #d9d9d9;
+  --chart-split: #f0f0f0;
+  --shadow-color: rgba(0, 0, 0, .025);
+}
+[data-theme='dark'] {
+  --bg-app: #101214;
+  --bg-base: #101214;
+  --bg-panel: #1b1d21;
+  --bg-panel-2: #23262b;
+  --bg-elevated: #2a2d33;
+  --bg-hover: #30343b;
+  --sidebar-bg: #181a1e;
+  --border-subtle: #2c2f35;
+  --border-default: #40444d;
+  --text-primary: #f0f0f0;
+  --text-secondary: #b7bbc3;
+  --text-tertiary: #9298a3;
+  --brand: #69a7ff;
+  --brand-hover: #4096ff;
+  --brand-soft: #172e4d;
+  --chart-label: #9298a3;
+  --chart-split: #2c2f35;
+  --chart-tooltip-bg: #23262b;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.num, .tnum { font-family: inherit; font-variant-numeric: tabular-nums; }
+.panel { border-radius: 8px; box-shadow: none; min-width: 0; }
+.panel-title { min-height: 56px; gap: 12px; flex-wrap: wrap; }
+.panel-title h3 { letter-spacing: 0; }
+.btn { border-radius: 6px; min-height: 34px; justify-content: center; }
+.btn.btn-ghost { background: var(--bg-panel); }
+.btn.btn-primary { box-shadow: 0 2px 0 rgba(5, 145, 255, .1); }
+.seg { border-radius: 6px; }
+.seg button { border-radius: 4px; }
+.badge { border-radius: 4px; }
+:where(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+input, select, textarea { font-family: inherit; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+.content :where(table) { border-collapse: collapse; }
+.content :where(thead) { background: var(--bg-panel-2); }
+.content :where(th) { color: var(--text-secondary); font-weight: 500; }
+.content :where(tbody tr) { transition: background .15s ease; }
+.content :where(tbody tr:hover) { background: var(--bg-panel-2); }
+.table-scroll { overflow-x: auto; }
+.table-scroll table { min-width: 720px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

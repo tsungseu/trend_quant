@@ -14,7 +14,9 @@ export const products = [
       '与 MindQuant Studio 同一品牌工作流衔接',
     ],
     ctaLabel: '试用 Agent',
-    ctaPath: '/advisor',
+    // 站内路由：官网 /agent 独立对话页（不再跳 Studio 终端）
+    ctaPath: '/agent',
+    ctaInternal: true,
   },
   {
     slug: 'studio',
@@ -95,6 +97,71 @@ export const pricingTiers = [
       '专属支持与 SLA',
     ],
   },
+]
+
+// 核心能力 6 卡：Agent + Studio 共同能力，不拆产品（对标 BigQuant 能力宫格）。
+// icon 为内联 SVG 字符串（Feather 风格），与终端 AppSidebar 一致。
+export const coreCapabilities = [
+  {
+    icon: 'brain',
+    title: 'AI 投研核心',
+    line: '对话式研报解读、策略思路探讨与组合建议，把研究从「读」推进到「问」。',
+  },
+  {
+    icon: 'database',
+    title: '量化数据',
+    line: '行情、基金与基本面数据统一接入，策略与研究共享同一份事实来源。',
+  },
+  {
+    icon: 'layers',
+    title: '因子与策略库',
+    line: '内置因子与策略模板，支持表达式扩展，从模仿到自建逐步沉淀方法论。',
+  },
+  {
+    icon: 'activity',
+    title: '回测与归因',
+    line: '策略回测、买卖点分析与盈亏归因，让每个结论都能回到它的来源与时点。',
+  },
+  {
+    icon: 'trending',
+    title: '行情与持仓',
+    line: '真实行情 K 线与指标、持仓与交易记录一体，研究态与执行态无缝衔接。',
+  },
+  {
+    icon: 'bell',
+    title: '预警与组合',
+    line: '策略预警、投顾组合推荐与跟踪，把注意力留在关键决策时刻。',
+  },
+]
+
+// 增值服务 3 卡：研究与成长（对标 BigQuant 培训/源码/实盘条）。
+export const growthResources = [
+  {
+    title: '教程与案例',
+    line: '从零上手 Agent 与 Studio：对话投研、回测到预警的完整路径，配以可复用的案例。',
+    cta: '免费学习',
+    href: '/docs',
+  },
+  {
+    title: '策略模板库',
+    line: '经典策略模板与因子示例，打开思路、快速复用，沉淀属于自己的研究资产。',
+    cta: '获取模板',
+    href: '/docs/strategies',
+  },
+  {
+    title: '模拟与实盘衔接',
+    line: '回测、模拟与实盘研究态同源，让研究里成立的逻辑在执行链路里不漂移。',
+    cta: '申请使用',
+    href: '/products/studio',
+  },
+]
+
+// 信任条：克制版指标，标注「示意」与 pricing-note 同口径，不造假数据。
+export const trustSignals = [
+  { label: '内置策略与模板', value: '100+' },
+  { label: '覆盖因子与指标', value: '2000+' },
+  { label: '行情与基金数据', value: '全市场' },
+  { label: '研究工作流', value: '一体衔接' },
 ]
 
 export const docsEntries = [

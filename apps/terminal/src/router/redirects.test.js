@@ -76,4 +76,18 @@ describe('legacy redirects', () => {
     await router.push('/this-does-not-exist')
     expect(router.currentRoute.value.name).toBe('not-found')
   })
+
+  it.each([
+    ['/app/gateway', 'gateway-overview'],
+    ['/app/gateway/keys', 'gateway-keys'],
+    ['/app/gateway/usage', 'gateway-usage'],
+    ['/app/gateway/wallet', 'gateway-wallet'],
+  ])('serves gateway route %s as %s', async (path, name) => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: buildRoutes(),
+    })
+    await router.push(path)
+    expect(router.currentRoute.value.name).toBe(name)
+  })
 })

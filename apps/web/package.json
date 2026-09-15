@@ -1,7 +1,7 @@
 {
   "name": "@trendquant/web",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "趋势量化 · TrendQuant - 营销官网",
   "scripts": {
@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/space-grotesk": "^5.3.0",
     "@trendquant/design-tokens": "0.1.0",
     "@trendquant/ui": "0.1.0",
     "vue": "^3.5.12",

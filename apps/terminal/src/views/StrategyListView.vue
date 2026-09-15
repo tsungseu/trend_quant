@@ -172,7 +172,13 @@ const sorts = [
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: $space-4;
+}
+
+@container (max-width: 900px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 600px) {
+  .toolbar, .toolbar-r { flex-wrap: wrap; gap: 12px; }
+  .seg { flex-wrap: wrap; }
 }
 </style>

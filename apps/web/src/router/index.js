@@ -11,6 +11,12 @@ export function buildRoutes() {
 
   return [
     {
+      // MindQuant Agent 独立对话页：不带营销布局
+      path: '/agent',
+      name: 'agent',
+      component: () => import('@/views/AgentView.vue'),
+    },
+    {
       path: '/',
       component: MarketingLayout,
       children: [

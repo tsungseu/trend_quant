@@ -5,6 +5,7 @@ import MiniMarkdown from '@/components/MiniMarkdown.vue'
 import { useLlmStore } from '@/stores/llm'
 import { streamChat } from '@/api/llm'
 import { createThinkStripper } from '@/utils/stripThink'
+import { RagClient } from '@trendquant/rag-client'
 
 const llmStore = useLlmStore()
 
@@ -50,6 +51,72 @@ const currentEffort = computed({
   get: () => runtime.value.effort || 'low',
   set: (v) => { runtime.value.effort = v; saveRuntime() },
 })
+
+// ---- 知识库（RAG）：可选增强 ----
+// 知识库开关：开启后提问走后端 /chat，把检索到的文档片段拼进 prompt。
+// 需要后端地址（VITE_RAG_API_URL）与会话 token；缺失时降级为提示，不阻断普通对话。
+const KB_KEY = 'advisor.kb'
+const ragApiUrl = import.meta.env.VITE_RAG_API_URL || ''
+// 占位 token：真实 Clerk 接入后由 auth store 提供；此处先从 localStorage 读，
+// 避免引入 Clerk SDK 依赖。无 token 时 kbReady=false，开关显示"需登录"。
+function loadKb() {
+  try {
+    const raw = localStorage.getItem(KB_KEY)
+    return raw ? JSON.parse(raw) : { enabled: false, token: '' }
+  } catch { return { enabled: false, token: '' } }
+}
+const kb = ref(loadKb())
+function saveKb() {
+  try { localStorage.setItem(KB_KEY, JSON.stringify(kb.value)) } catch {}
+}
+watch(kb, saveKb, { deep: true })
+
+// 登录态占位：真实环境由 Clerk 注入 token；此处暴露全局 hook 便于集成与测试。
+// window.__TQ_RAG_TOKEN__ 优先，其次 kb.token（localStorage）。
+const ragToken = computed(() => (typeof window !== 'undefined' && window.__TQ_RAG_TOKEN__) || kb.value.token || '')
+const kbReady = computed(() => !!ragApiUrl && !!ragToken.value)
+// 知识库实际可用 = 开关开 且 后端+token 就绪；否则走原对话链路
+const kbActive = computed(() => kb.value.enabled && kbReady.value)
+
+let ragClient = null
+function getRagClient() {
+  if (!ragClient && ragApiUrl) {
+    ragClient = new RagClient({
+      baseUrl: ragApiUrl,
+      getToken: async () => ragToken.value || '',
+    })
+  }
+  return ragClient
+}
+
+// 上传文件到知识库（失败不阻断对话）
+const kbUploading = ref(false)
+const kbUploadHint = ref('')
+async function uploadToKb(file) {
+  if (!kbReady.value) {
+    kbUploadHint.value = '知识库未就绪（需配置后端地址与登录）'
+    return
+  }
+  kbUploading.value = true
+  kbUploadHint.value = ''
+  try {
+    const doc = await getRagClient().uploadDocument(file, file.name || 'upload', file.type || 'application/octet-stream')
+    kbUploadHint.value = `已加入「${doc.filename}」，状态：${doc.status}${doc.lowConfidence ? '（OCR 质量有限）' : ''}`
+  } catch (e) {
+    kbUploadHint.value = '上传失败：' + (e?.message || '未知错误')
+  } finally {
+    kbUploading.value = false
+  }
+}
+
+// KB 切换：未就绪时不允许开启，并给出提示
+function toggleKb(on) {
+  if (on && !kbReady.value) {
+    kbUploadHint.value = '知识库需要后端地址（VITE_RAG_API_URL）与登录 token。'
+    return
+  }
+  kb.value.enabled = on
+}
 
 // 会话列表：从 mock 初始化，发送/新建时实时更新
 const sessions = ref(JSON.parse(JSON.stringify(initialSessions)))
@@ -154,6 +221,35 @@ async function streamFromLlm(q, aiMsg) {
   )
 }
 
+// 知识库流式调用：经后端 /chat，先收 citations 再逐 delta
+async function streamFromRag(q, aiMsg) {
+  const client = getRagClient()
+  if (!client) throw new Error('知识库未配置（缺少 VITE_RAG_API_URL）')
+  abortCtrl = new AbortController()
+  const stripper = createThinkStripper()
+  // 引用片段：citations 事件到达时存起来，回答结束后附在消息末尾
+  let citations = []
+  await client.chatStream(
+    q,
+    (e) => {
+      if (e.type === 'citations') {
+        citations = e.hits
+      } else if (e.type === 'delta') {
+        aiMsg.content += stripper.push(e.text)
+        scrollToBottom()
+      } else if (e.type === 'error') {
+        throw new Error('RAG 错误：' + (e.message || '未知'))
+      }
+    },
+    { signal: abortCtrl.signal, history: messages.value.filter((m) => m.role === 'user' || m.role === 'ai').slice(-10, -1).map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })) },
+  )
+  // 追加来源标注
+  if (citations.length > 0) {
+    aiMsg.content += '\n\n---\n**来源：**\n' + citations.map((h, i) => `[${i + 1}] ${h.docId} · ${String(h.text).slice(0, 60)}…`).join('\n')
+    scrollToBottom()
+  }
+}
+
 // 发送消息：配置完整则真实流式，否则回退模拟流式回复
 async function send(text) {
   const q = (text ?? input.value).trim()
@@ -176,7 +272,17 @@ async function send(text) {
 
   const useReal = llmStore.isConfigured
   try {
-    if (useReal) {
+    if (kbActive.value) {
+      // 知识库优先：经后端检索增强。失败时回退到普通 LLM/模拟
+      try {
+        await streamFromRag(q, aiMsg)
+      } catch (ragErr) {
+        console.warn('[advisor] rag failed, fallback to llm/mock:', ragErr?.message)
+        aiMsg.content = ''
+        if (useReal) await streamFromLlm(q, aiMsg)
+        else throw ragErr // 落入外层 catch 的模拟回退
+      }
+    } else if (useReal) {
       await streamFromLlm(q, aiMsg)
     } else {
       const full = matchReply(q)
@@ -317,6 +423,31 @@ onUnmounted(clearStreamTimer)
               @click="currentEffort = lv.value"
             >{{ lv.label }}</button>
           </div>
+          <!-- 知识库开关：检索增强对话。未就绪时禁用并提示 -->
+          <button
+            type="button"
+            class="kb-toggle"
+            :class="{ active: kbActive, ready: kbReady }"
+            :title="kbReady ? '开启后回答会检索你的知识库文档' : '需要后端地址（VITE_RAG_API_URL）与登录 token'"
+            :disabled="isStreaming || !kbReady"
+            @click="toggleKb(!kb.enabled)"
+          >📚 知识库{{ kb.enabled ? '·开' : '' }}</button>
+          <!-- 上传到知识库 -->
+          <label
+            class="kb-upload"
+            :class="{ disabled: !kbReady || kbUploading }"
+            :title="kbReady ? '上传文档到知识库（PDF/文本/图片）' : '知识库未就绪'"
+          >
+            <input
+              type="file"
+              accept=".pdf,.txt,.md,text/*,image/*"
+              :disabled="!kbReady || kbUploading || isStreaming"
+              @change="(e) => { const f = e.target.files?.[0]; if (f) uploadToKb(f); e.target.value = '' }"
+              hidden
+            />
+            <span>＋上传</span>
+          </label>
+          <span v-if="kbUploadHint" class="kb-hint">{{ kbUploadHint }}</span>
           <button class="ch-action" title="清空对话">🗑</button>
         </div>
       </div>
@@ -359,6 +490,7 @@ onUnmounted(clearStreamTimer)
       <div class="input-bar">
         <button class="attach" title="附件">📎</button>
         <input
+          class="composer-input"
           v-model="input"
           placeholder="向 AI 投顾提问，如：诊断我的持仓…"
           @keydown.enter="send()"
@@ -597,6 +729,51 @@ onUnmounted(clearStreamTimer)
     color: #fff;
   }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+// 知识库控件
+.kb-toggle {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid $border-subtle;
+  border-radius: 4px;
+  background: transparent;
+  color: $text-tertiary;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  &:hover:not(:disabled) { color: $text-primary; border-color: $brand; }
+  &.active {
+    background: $brand;
+    color: #fff;
+    border-color: $brand;
+  }
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+  &:not(.ready) {
+    border-style: dashed;
+  }
+}
+.kb-upload {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid $border-subtle;
+  border-radius: 4px;
+  font-size: 11px;
+  color: $text-secondary;
+  cursor: pointer;
+  &:hover:not(.disabled) { color: $brand; border-color: $brand; }
+  &.disabled { opacity: 0.45; cursor: not-allowed; }
+}
+.kb-hint {
+  font-size: 10px;
+  color: $text-tertiary;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-body {

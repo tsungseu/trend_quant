@@ -4,15 +4,13 @@
 // （圆角 / 间距 / 阴影 / 缓动）。
 //
 // 实际 CSS 变量定义（终端深色/浅色主题 + 营销固定令牌）唯一维护于
-// ./index.css，这里通过 @import 引入，避免两处重复。
+// ./index.css，由每个应用的 main.js 通过 Vite CSS 管线引入一次。
 //
 // 用法：SCSS 项目 `@use '@trendquant/design-tokens/tokens.scss' as *;`
-// 即可同时拿到 CSS 变量 + `$xxx` 简写；纯 CSS / 非 Sass 项目
-// 直接引入 `@trendquant/design-tokens/index.css` 即可。
-// 二者选其一即可，不要同时引入两者（会重复声明同一批 CSS 变量）。
+// 即可拿到 `$xxx` 简写；应用入口还须引入
+// `@trendquant/design-tokens/index.css`，提供实际 CSS 变量。
+// 不在 Sass 中 @import .css，否则构建产物会保留指向源码目录的 URL。
 // ============================================================
-
-@import './index.css';
 
 // ---- SCSS 变量 → 全部转发到 CSS 变量（终端主题）----
 $bg-base: var(--bg-base);

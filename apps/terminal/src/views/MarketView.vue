@@ -130,8 +130,8 @@ const klineOption = computed(() => {
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: [
-      { left: 16, right: 50, top: 36, height: '58%' },
-      { left: 16, right: 50, top: '74%', height: '18%' },
+      { left: 64, right: 24, top: 36, height: '58%' },
+      { left: 64, right: 24, top: '74%', height: '18%' },
     ],
     xAxis: [
       {
@@ -284,6 +284,11 @@ function toggleMA(n) {
     <section class="chart-area">
       <!-- 标的头部信息 -->
       <div class="panel stock-head">
+        <label class="compact-stock-picker">切换自选股
+          <select :value="market.activeCode" @change="market.select($event.target.value)">
+            <option v-for="stock in market.stocks" :key="stock.code" :value="stock.code">{{ stock.name }} · {{ stock.code }}</option>
+          </select>
+        </label>
         <div class="s-main">
           <h2>{{ active.name }}
             <span class="tag">{{ active.code }}</span>
@@ -323,8 +328,8 @@ function toggleMA(n) {
 
       <!-- 图表 -->
       <div class="panel chart-box">
-        <EChart v-if="chartTab === 'kline'" :option="klineOption" height="520px" />
-        <EChart v-else :option="intradayOption" height="520px" />
+        <EChart v-if="chartTab === 'kline'" :option="klineOption" height="clamp(320px, 52vh, 520px)" />
+        <EChart v-else :option="intradayOption" height="clamp(320px, 52vh, 520px)" />
       </div>
     </section>
 
@@ -372,16 +377,18 @@ function toggleMA(n) {
 
 .market {
   display: grid;
-  grid-template-columns: 280px 1fr 260px;
+  grid-template-columns: 240px minmax(0, 1fr) 240px;
+  grid-template-areas: 'watchlist chart details';
+  align-items: start;
   gap: $space-5;
-  height: 100%;
 }
 
 /* 自选列表 */
 .watchlist {
+  grid-area: watchlist;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  max-height: max(360px, calc(100dvh - 220px));
   min-height: 0;
 }
 .wl-head,
@@ -439,6 +446,7 @@ function toggleMA(n) {
 
 /* 主图表区 */
 .chart-area {
+  grid-area: chart;
   display: flex;
   flex-direction: column;
   gap: $space-5;
@@ -460,6 +468,7 @@ function toggleMA(n) {
   font-size: 18px;
   font-weight: 600;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: $space-2;
   .tag {
@@ -478,6 +487,7 @@ function toggleMA(n) {
   font-size: 26px;
   font-weight: 700;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: $space-3;
   .chg {
@@ -506,6 +516,7 @@ function toggleMA(n) {
 }
 .s-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: $space-3;
   align-items: center;
 }
@@ -532,9 +543,37 @@ function toggleMA(n) {
 
 /* 右侧 */
 .side-right {
+  grid-area: details;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: $space-5;
+}
+
+.compact-stock-picker { display: none; }
+.s-actions .seg { flex-shrink: 0; }
+.s-actions button { white-space: nowrap; }
+@container (max-width: 1200px) {
+  .market { grid-template-columns: 220px minmax(0, 1fr); grid-template-areas: 'watchlist chart' 'details details'; }
+  .side-right { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .s-quotations { margin-left: 0; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 760px) {
+  .market { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'chart' 'watchlist' 'details'; }
+  .watchlist { max-height: 360px; }
+  .compact-stock-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; font-size: 12px; color: $text-secondary; }
+  .compact-stock-picker select { min-width: 0; max-width: 100%; padding: 7px 10px; color: $text-primary; background: $bg-panel-2; border: 1px solid $border-default; border-radius: 6px; }
+  .stock-head { gap: 16px; }
+  .chart-box { padding: 8px; }
+}
+@container (max-width: 480px) {
+  .side-right { grid-template-columns: minmax(0, 1fr); }
+  .s-main h2 { font-size: 16px; }
+  .s-price { font-size: 24px; }
+  .s-quotations { gap: 8px 12px; }
+  .s-actions { gap: 8px; }
+  .s-actions button { padding-inline: 10px; }
+  .data-source-tag { margin-left: 0; }
 }
 .sectors {
   padding: $space-2;
@@ -602,236 +641,5 @@ function toggleMA(n) {
   padding: $space-2 $space-4 $space-3;
   font-size: 10px;
   line-height: 1.4;
-}
-</style>
-
-
-<style lang="scss" scoped>
-@use '@/styles/tokens' as *;
-
-.market {
-  display: grid;
-  grid-template-columns: 280px 1fr 260px;
-  gap: $space-5;
-  height: 100%;
-}
-
-/* 自选列表 */
-.watchlist {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-.wl-head,
-.wl-body li {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr;
-  gap: $space-2;
-  padding: 0 $space-4;
-}
-.wl-head {
-  padding-top: $space-3;
-  padding-bottom: $space-2;
-  font-size: 11px;
-  color: $text-tertiary;
-  border-bottom: 1px solid $border-subtle;
-}
-.wl-body {
-  overflow-y: auto;
-  li {
-    padding: $space-3 $space-4;
-    align-items: center;
-    cursor: pointer;
-    border-left: 2px solid transparent;
-    transition: background $transition-fast;
-    &:hover {
-      background: $bg-panel-2;
-    }
-    &.active {
-      background: $brand-soft;
-      border-left-color: $brand;
-    }
-  }
-}
-.sym {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  .nm {
-    font-size: 13px;
-    font-weight: 500;
-  }
-  .cd {
-    font-size: 10px;
-    color: $text-tertiary;
-  }
-}
-.px {
-  font-size: 13px;
-  font-weight: 600;
-}
-.pct {
-  font-size: 12px;
-  text-align: right;
-}
-
-/* 主图表区 */
-.chart-area {
-  display: flex;
-  flex-direction: column;
-  gap: $space-5;
-  min-width: 0;
-}
-.stock-head {
-  padding: $space-4 $space-5;
-  display: flex;
-  align-items: center;
-  gap: $space-6;
-  flex-wrap: wrap;
-}
-.s-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.s-main h2 {
-  font-size: 18px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: $space-2;
-  .tag {
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: $bg-panel-2;
-    color: $text-tertiary;
-    font-weight: 400;
-    &.sector {
-      color: $brand;
-    }
-  }
-}
-.s-price {
-  font-size: 26px;
-  font-weight: 700;
-  display: flex;
-  align-items: baseline;
-  gap: $space-3;
-  .chg {
-    font-size: 13px;
-    font-weight: 500;
-  }
-}
-.s-quotations {
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  gap: $space-2 $space-6;
-  margin-left: auto;
-  .q {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    span {
-      font-size: 11px;
-      color: $text-tertiary;
-    }
-    b {
-      font-size: 13px;
-      font-weight: 600;
-    }
-  }
-}
-.s-actions {
-  display: flex;
-  gap: $space-3;
-  align-items: center;
-}
-.data-source-tag {
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  color: $text-tertiary;
-  background: $bg-panel-2;
-  margin-left: $space-2;
-  &.real {
-    color: $success;
-    background: rgba(34,197,94,0.1);
-  }
-}
-.chart-box {
-  padding: $space-4;
-  flex: 1;
-  min-height: 0;
-}
-
-/* 右侧 */
-.side-right {
-  display: flex;
-  flex-direction: column;
-  gap: $space-5;
-}
-.sectors {
-  padding: $space-2;
-}
-.sector-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: $space-3 $space-4;
-  border-radius: $radius-sm;
-  &:hover {
-    background: $bg-panel-2;
-  }
-  .sec-l {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    .sec-name {
-      font-size: 13px;
-    }
-    .sec-lead {
-      font-size: 10px;
-    }
-  }
-  span.num {
-    font-size: 14px;
-    font-weight: 600;
-  }
-}
-
-.book {
-  padding: $space-3 $space-4;
-}
-.book-row {
-  display: grid;
-  grid-template-columns: 40px 1fr 60px;
-  gap: $space-3;
-  padding: 5px 0;
-  font-size: 12px;
-  align-items: center;
-  &.buy span:nth-child(2) {
-    color: $up;
-  }
-  &.sell span:nth-child(2) {
-    color: $down;
-  }
-}
-.book-mid {
-  text-align: center;
-  font-size: 20px;
-  font-weight: 700;
-  padding: $space-3 0;
-  margin: $space-2 0;
-  border-top: 1px solid $border-subtle;
-  border-bottom: 1px solid $border-subtle;
-  font-family: 'JetBrains Mono', monospace;
-  &.up {
-    color: $up;
-  }
-  &.down {
-    color: $down;
-  }
 }
 </style>

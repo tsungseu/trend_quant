@@ -384,7 +384,7 @@ function actionIcon(e) {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   gap: $space-5;
 }
 
@@ -582,5 +582,11 @@ function actionIcon(e) {
   .ew-icon { font-size: 56px; }
   h3 { font-size: 18px; }
   p { font-size: 13px; }
+}
+
+@container (max-width: 900px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 600px) {
+  .toolbar, .toolbar-r { flex-wrap: wrap; gap: 12px; }
+  .seg { flex-wrap: wrap; }
 }
 </style>

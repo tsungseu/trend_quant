@@ -9,3 +9,9 @@ const prodDefault = `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/#/a
 export const terminalUrl =
   import.meta.env.VITE_TERMINAL_URL ||
   (import.meta.env.PROD ? prodDefault : 'http://localhost:5173/app')
+
+// MindQuant Agent 独立对话页：官网自身的 /agent 路由（不跳 Studio 终端）。
+// 生产为 hash 路由，与终端入口同一套部署约定。
+export const agentUrl = import.meta.env.PROD
+  ? `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/#/agent`
+  : '/agent'

@@ -1,5 +1,6 @@
 <script setup>
 import { products } from '@/data/catalog'
+import CapabilityGrid from '@/components/CapabilityGrid.vue'
 </script>
 
 <template>
@@ -14,6 +15,13 @@ import { products } from '@/data/catalog'
         </p>
       </div>
     </header>
+
+    <!-- 能力概览：门户式宫格，承接首页叙事 -->
+    <CapabilityGrid
+      :limit="3"
+      eyebrow="平台能力"
+      heading="Agent 与 Studio 共用的同一套能力底座"
+    />
 
     <section class="mkt-section line-section">
       <div class="mkt-container">
@@ -70,7 +78,7 @@ $font-display: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', system-ui, san
 }
 
 .line-section {
-  padding-top: 48px;
+  padding-top: 16px;
 }
 .product-lines {
   display: grid;

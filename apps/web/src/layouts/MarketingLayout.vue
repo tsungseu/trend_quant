@@ -3,11 +3,9 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TqButton, TqNavLink } from '@trendquant/ui'
 import { products } from '@/data/catalog'
-import { terminalUrl as studioUrl } from '@/data/terminal'
+import { agentUrl, terminalUrl as studioUrl } from '@/data/terminal'
 
 const route = useRoute()
-
-const agentUrl = computed(() => `${studioUrl.replace(/\/$/, '')}/advisor`)
 
 const links = [
   { to: '/pricing', label: '价格' },
@@ -380,7 +378,7 @@ const year = new Date().getFullYear()
   color: rgba(154, 167, 194, 0.7);
 }
 .footer-legal-note {
-  color: rgba(154, 167, 194, 0.55);
+  color: rgba(154, 167, 194, 0.72);
 }
 
 @media (max-width: 640px) {

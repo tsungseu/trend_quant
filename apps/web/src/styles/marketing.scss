@@ -3,7 +3,7 @@
 // 令牌 CSS 变量由 main.js `import '@trendquant/design-tokens/index.css'`
 // 全局注入；本文件用 tokens.scss 的 $var 简写 + 常量。
 // 视觉主线：深色英雄区（--hero-gradient）+ 浅色纸感内容区（--bg-paper）。
-// 展示字体用 Space Grotesk（Google Fonts CDN，index.html 引入），非 Inter。
+// 展示字体 Space Grotesk 自托管（main.js 引 @fontsource），非 Inter。
 // ============================================================
 
 @use '@trendquant/design-tokens/tokens.scss' as *;
@@ -18,8 +18,10 @@ $font-body: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHe
   box-sizing: border-box;
 }
 
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 html,

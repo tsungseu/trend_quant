@@ -128,6 +128,8 @@ export function chartTheme() {
   }
   return {
     label: v('--chart-label', '#5d6b8a'),
+    text: v('--text-primary', '#e6ebf5'),
+    panel: v('--bg-panel', '#161d2e'),
     axis: v('--chart-axis', 'rgba(148,163,184,0.15)'),
     split: v('--chart-split', 'rgba(148,163,184,0.06)'),
     secondary: v('--text-secondary', '#9aa7c2'),
