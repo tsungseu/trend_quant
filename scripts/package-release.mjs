@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -43,6 +43,26 @@ for (const [workspace, base, destination] of [
   })
   cpSync(join(root, 'apps', workspace, 'dist'), destination, { recursive: true })
 }
+
+// Fail before publishing if CSS imports/fonts or entry assets point outside the package.
+function verifyAssets(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const file = join(directory, entry.name)
+    if (entry.isDirectory()) { verifyAssets(file); continue }
+    if (!/\.(css|html)$/.test(file)) continue
+    const source = readFileSync(file, 'utf8')
+    const refs = file.endsWith('.css')
+      ? [...source.matchAll(/@import\s*["']([^"']+)["']|url\(\s*["']?([^"')\s]+)["']?\s*\)/g)].map((m) => m[1] || m[2])
+      : [...source.matchAll(/(?:src|href)=["']([^"']+)["']/g)].map((m) => m[1])
+    for (const ref of refs) {
+      if (/^(?:[a-z]+:|\/\/|#)/i.test(ref)) continue
+      const pathname = ref.split(/[?#]/)[0]
+      const target = pathname.startsWith('/') ? join(site, pathname.slice(1)) : resolve(dirname(file), pathname)
+      if (!existsSync(target)) throw new Error(`Missing packaged asset: ${ref} in ${file}`)
+    }
+  }
+}
+verifyAssets(site)
 
 const manifest = {
   version, commit, builtAt: new Date().toISOString(), dataMode: 'demo',

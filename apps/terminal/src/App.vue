@@ -26,6 +26,9 @@ function toggleNavigation() {
   if (window.matchMedia('(max-width: 760px)').matches) mobileOpen.value = !mobileOpen.value
   else collapsed.value = !collapsed.value
 }
+function focusContent() {
+  document.getElementById('studio-content')?.focus()
+}
 
 // 界面字号写入根节点 CSS 变量，供全局 rem/px 缩放（影响界面文字，不影响布局/图标）
 watchEffect(() => {
@@ -86,7 +89,7 @@ onUnmounted(() => {
 
 <template>
   <div class="layout" :class="{ 'nav-collapsed': collapsed, 'nav-open': mobileOpen }" @keydown.esc="mobileOpen = false">
-    <a href="#studio-content" class="skip-link">跳转到主要内容</a>
+    <a href="#studio-content" class="skip-link" @click.prevent="focusContent">跳转到主要内容</a>
     <AppSidebar :collapsed="collapsed" :mobile-open="mobileOpen" />
     <button v-if="mobileOpen" class="nav-backdrop" aria-label="关闭导航" @click="mobileOpen = false" />
     <div class="main">
