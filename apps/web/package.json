@@ -1,7 +1,7 @@
 {
   "name": "@trendquant/web",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "趋势量化 · TrendQuant - 营销官网",
   "scripts": {

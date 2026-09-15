@@ -1,18 +1,97 @@
 # 趋势量化 · TrendQuant
 
-Vite + Vue 3 量化投研终端，提供基金量化信号、行情看盘、预警中心、回测编辑器等模块。
+Vite + Vue 3 monorepo：营销站（`apps/web`）、MindQuant Studio 量化终端（`apps/terminal`），以及可选的知识库 API / 管理台。
 
 > ⚠️ 本项目页面所有"模型信号""价格提醒"仅用于量化研究和提醒，**不构成投资建议**。模型基于历史数据计算，不保证未来表现。
 
-## 快速开始
+## 本地启动
+
+本仓库为 npm workspaces monorepo。日常本地开发通常只需起 **营销站** 与 **MindQuant Studio**；知识库 / API / 管理台按需另开。
+
+### 1. 安装依赖
 
 ```bash
 npm install
-npm run dev        # 本地开发：http://localhost:5173
-npm run test:unit  # 运行单元测试（Vitest）
-npm run build      # 生产构建
-npm run check      # 测试 + 构建 一键校验
-npm run preview    # 本地预览生产构建
+```
+
+### 2. 最小启动（官网 + Studio）
+
+开两个终端：
+
+```bash
+# 终端 A · 营销站 TrendQuant Web
+npm run dev:web
+# → http://localhost:5174/
+
+# 终端 B · MindQuant Studio（量化交易终端）
+npm run dev:terminal
+# → http://localhost:5173/app
+```
+
+| 应用 | 命令 | 本地地址 |
+|------|------|----------|
+| 营销站 `apps/web` | `npm run dev:web` | http://localhost:5174/ |
+| MindQuant Studio `apps/terminal` | `npm run dev:terminal` | http://localhost:5173/app |
+| MindQuant Agent（官网内对话页） | 随 web 一起 | http://localhost:5174/agent |
+
+官网「打开 Studio」默认指向 `http://localhost:5173/app`（见 `apps/web/.env.example` 的 `VITE_TERMINAL_URL`）。
+
+### 3. 可选：环境变量
+
+本地可不配环境变量即可跑通（Studio 开发默认 `direct` 数据模式）。若要显式控制：
+
+```bash
+# 根目录或 apps/terminal
+cp .env.example .env          # 或 cp apps/terminal/.env.example apps/terminal/.env
+
+# 营销站（可选，覆盖 Studio 入口）
+cp apps/web/.env.example apps/web/.env
+```
+
+常用变量：`VITE_DATA_MODE`、`VITE_ALLOW_THIRD_PARTY_SCRIPTS`、`VITE_TERMINAL_URL`（详见下方「数据模式」与各 `.env.example`）。
+
+### 4. 可选：知识库 RAG / API / 管理台
+
+需要投顾知识库时再启动：
+
+```bash
+# 1. Docker：Qdrant + MinIO
+docker compose -f infra/docker-compose.yml up -d
+
+# 2. API 环境变量
+cp apps/api/.env.example apps/api/.env
+# 至少填 OPENAI_API_KEY；未配 CLERK_SECRET_KEY 时自动 dev fake 鉴权
+
+# 3. 后端 +（可选）管理台
+npm run dev:api      # http://localhost:8080
+npm run dev:admin    # http://localhost:5175
+
+# 4. Studio 指向 RAG API（另开终端）
+# Windows PowerShell:
+$env:VITE_RAG_API_URL="http://localhost:8080"; npm run dev:terminal
+# macOS / Linux:
+VITE_RAG_API_URL=http://localhost:8080 npm run dev:terminal
+```
+
+更完整的 RAG 说明见下文「Phase 3 · 知识库 RAG」。
+
+### 5. 常用脚本
+
+```bash
+npm run test:unit    # Studio 单元测试（Vitest）
+npm run test:api     # API 单元测试
+npm run build:web    # 构建营销站
+npm run build        # 构建 Studio
+npm run build:all    # 构建 web + terminal
+npm run check        # Studio：测试 + 构建
+```
+
+## 版本与发布
+
+当前产品版本：**1.1.0**。更新记录见 [CHANGELOG.md](CHANGELOG.md)，打包与部署说明见 [docs/RELEASING.md](docs/RELEASING.md)。
+
+```bash
+npm run release:pack   # 构建官网、Studio、管理台并生成静态发布包及 SHA-256 校验文件
 ```
 
 ## 数据模式（重要）

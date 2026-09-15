@@ -71,6 +71,7 @@ const cashOut = computed(() =>
 
     <!-- 成交记录 -->
     <section v-if="tab === 'trades'" class="panel">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的数据表">
       <table class="t-table">
         <thead>
           <tr>
@@ -111,10 +112,12 @@ const cashOut = computed(() =>
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
 
     <!-- 资金流水 -->
     <section v-else class="panel">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的数据表">
       <table class="t-table">
         <thead>
           <tr>
@@ -139,6 +142,7 @@ const cashOut = computed(() =>
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
   </div>
 </template>
@@ -258,5 +262,14 @@ const cashOut = computed(() =>
   padding: 2px 8px;
   background: $bg-panel-2;
   border-radius: 4px;
+}
+
+@container (max-width: 1000px) { .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 650px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .toolbar { flex-wrap: wrap; gap: 12px; }
+  .seg { flex-wrap: wrap; }
+  .tb-actions { flex-wrap: wrap; }
 }
 </style>

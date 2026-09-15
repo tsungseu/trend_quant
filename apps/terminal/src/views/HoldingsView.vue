@@ -138,6 +138,7 @@ const profitBarOption = computed(() => {
           <button class="btn btn-ghost btn-sm">导出</button>
         </div>
       </div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的数据表">
       <table class="h-table">
         <thead>
           <tr>
@@ -196,6 +197,7 @@ const profitBarOption = computed(() => {
           </tr>
         </tfoot>
       </table>
+      </div>
     </section>
   </div>
 </template>
@@ -370,5 +372,14 @@ const profitBarOption = computed(() => {
       background: $down-bg;
     }
   }
+}
+
+@container (max-width: 1000px) { .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 650px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .toolbar { flex-wrap: wrap; gap: 12px; }
+  .seg { flex-wrap: wrap; }
+  .tb-actions { flex-wrap: wrap; }
 }
 </style>

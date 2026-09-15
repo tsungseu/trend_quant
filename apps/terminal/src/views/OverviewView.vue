@@ -4,7 +4,6 @@ import { useAccountStore } from '@/stores/account'
 import { useThemeStore } from '@/stores/theme'
 import { fmtMoney, fmtSignedMoney, fmtPct, sign, round, chartTheme } from '@/mock/_helpers'
 import { qualityLabel } from '@/utils/dataQuality'
-import StatCard from '@/components/StatCard.vue'
 import EChart from '@/components/EChart.vue'
 
 const account = useAccountStore()
@@ -119,10 +118,10 @@ const allocOption = computed(() => {
       label: {
         show: true, position: 'center',
         formatter: () => '{a|总资产}\n{b|' + fmtMoney(info.value.totalAssets ?? 0) + '}',
-        rich: { a: { color: t.secondary, fontSize: 12, padding: [0, 0, 6, 0] }, b: { color: '#f5b73d', fontSize: 18, fontWeight: 'bold' } },
+        rich: { a: { color: t.secondary, fontSize: 12, padding: [0, 0, 6, 0] }, b: { color: t.text, fontSize: 18, fontWeight: 600 } },
       },
       labelLine: { show: false },
-      itemStyle: { borderColor: 'var(--bg-panel)', borderWidth: 3 },
+      itemStyle: { borderColor: t.panel, borderWidth: 3 },
       data: (info.value.allocations || []).map((a) => ({ value: a.value, name: a.name, itemStyle: { color: a.color } })),
     }],
   }
@@ -151,6 +150,10 @@ onMounted(() => {
 
 <template>
   <div class="overview">
+    <header class="page-heading">
+      <div><h1>资产总览</h1><p>关注组合表现，掌握收益与风险。</p></div>
+      <div class="page-actions"><RouterLink to="/app/holdings" class="btn btn-ghost">查看持仓</RouterLink><RouterLink to="/app/backtest" class="btn btn-primary">策略回测 <span aria-hidden="true">↗</span></RouterLink></div>
+    </header>
     <!-- ① 顶部资产大卡 + 收益总览卡片 -->
     <section class="hero">
       <div class="hero-card panel">
@@ -160,7 +163,7 @@ onMounted(() => {
               总资产 (CNY)
               <span class="quality-chip" :title="accountQuality">{{ accountQuality }}</span>
             </div>
-            <div class="hero-value num gold">{{ fmtMoney(info.totalAssets ?? 0) }}</div>
+            <div class="hero-value num">{{ fmtMoney(info.totalAssets ?? 0) }}</div>
             <div class="hero-sub">
               今日盈亏
               <span class="num" :class="(info.todayProfit ?? 0) > 0 ? 'up' : 'down'">
@@ -186,14 +189,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <StatCard
-        v-for="m in account.keyMetrics.slice(0, 4)"
-        :key="m.label"
-        :label="m.label"
-        :value="m.value"
-        :sub="m.sub"
-        :tone="m.tone"
-      />
     </section>
 
     <!-- ② 收益总览：昨日/本周/本月/本年 -->
@@ -212,18 +207,19 @@ onMounted(() => {
       <div class="panel chart-panel">
         <div class="panel-title">
           <h3>收益走势</h3>
-          <span class="sub">vs 沪深300 · 纳斯达克100（{{ account.benchmarkHasRealHs300 ? '沪深300为真实行情' : '沪深300为模拟基准' }}，纳指100为{{ account.benchmarkHasRealNdx ? '真实行情' : '模拟基准' }}）</span>
           <div class="range seg">
             <button
               v-for="r in ranges"
               :key="r.key"
               :class="{ active: account.activeRange === r.key }"
+              :aria-pressed="account.activeRange === r.key"
               @click="account.setRange(r.key)"
             >
               {{ r.label }}
             </button>
           </div>
         </div>
+        <p class="benchmark-note">对比基准：沪深300（{{ account.benchmarkHasRealHs300 ? '真实行情' : '模拟' }}） · 纳斯达克100（{{ account.benchmarkHasRealNdx ? '真实行情' : '模拟' }}）</p>
         <div class="range-stat">
           <span class="muted">区间收益：</span>
           <span class="num" :class="account.rangeProfit.pct > 0 ? 'up' : 'down'">
@@ -237,7 +233,7 @@ onMounted(() => {
       <div class="panel chart-panel">
         <div class="panel-title">
           <h3>资产配置</h3>
-          <span class="sub">实时</span>
+          <span class="sub">{{ accountQuality }}</span>
         </div>
         <EChart :option="allocOption" height="340px" />
       </div>
@@ -295,17 +291,23 @@ onMounted(() => {
 .overview {
   display: flex;
   flex-direction: column;
-  gap: $space-4;
+  gap: 20px;
 }
+
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0 2px; }
+.page-heading h1 { font-size: 24px; font-weight: 600; letter-spacing: -.5px; }
+.page-heading p { color: $text-secondary; font-size: 13px; margin-top: 6px; }
+.page-actions { display: flex; gap: 10px; }
+.benchmark-note { padding: 12px 20px 0; color: $text-tertiary; font-size: 11px; }
 
 .hero {
   display: grid;
-  grid-template-columns: 2.2fr repeat(4, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: $space-3;
 }
 
 .hero-card {
-  padding: $space-4 $space-5;
+  padding: 24px;
 }
 .hero-top {
   display: flex;
@@ -336,23 +338,24 @@ onMounted(() => {
   border: 1px solid rgba(245, 183, 61, 0.28);
   white-space: nowrap;
 }
-.hero-value { font-size: 34px; font-weight: 700; letter-spacing: -1px; }
+.hero-value { font-size: clamp(28px, 3vw, 38px); font-weight: 600; letter-spacing: -1px; }
 .hero-sub { font-size: 13px; color: $text-secondary; }
 .hero-r {
   display: flex;
-  flex-direction: column;
-  gap: $space-2;
+  flex-direction: row;
+  gap: 32px;
+  padding-left: 32px;
+  border-left: 1px solid $border-subtle;
   position: relative;
   z-index: 1;
 }
 .kv {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $space-6;
-  min-width: 200px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   .k { font-size: 12px; color: $text-tertiary; }
-  .v { font-size: 14px; font-weight: 600; }
+  .v { font-size: 16px; font-weight: 500; }
 }
 
 /* ② 收益总览卡片 */
@@ -362,18 +365,15 @@ onMounted(() => {
   gap: $space-3;
 }
 .ps-card {
-  padding: $space-3 $space-4;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  border-left: 2px solid transparent;
-  &.up { border-left-color: $up; }
-  &.down { border-left-color: $down; }
+  gap: 10px;
 }
 .ps-label { font-size: 12px; color: $text-secondary; }
 .ps-value {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 500;
   .up & { color: $up; }
   .down & { color: $down; }
 }
@@ -382,7 +382,7 @@ onMounted(() => {
 /* 收益走势 + 资产配置 行 */
 .row-2 {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
+  grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr);
   gap: $space-4;
 }
 .chart-panel {
@@ -451,5 +451,30 @@ onMounted(() => {
   font-weight: 600;
   .num.up { color: $up; }
   .num.down { color: $down; }
+}
+
+@container (max-width: 1150px) {
+  .hero-r { gap: 20px; padding-left: 24px; }
+  .kv .v { font-size: 14px; }
+  .hero-top { flex-wrap: wrap; }
+  .hero-r { flex: 1; justify-content: space-between; }
+  .row-2 { grid-template-columns: minmax(0, 1fr) minmax(280px, .65fr); }
+  .range { flex-wrap: wrap; }
+}
+@container (max-width: 850px) {
+  .hero-top { align-items: flex-start; flex-direction: column; }
+  .hero-r { width: 100%; padding: 20px 0 0; border-left: 0; border-top: 1px solid $border-subtle; }
+  .profit-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row-2 { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 500px) {
+  .page-heading { align-items: flex-start; flex-direction: column; }
+  .hero-card { padding: 20px; }
+  .hero-r { flex-wrap: wrap; gap: 16px 20px; }
+  .hero-sub { font-size: 12px; }
+  .ps-card { padding: 16px; }
+  .ps-value { font-size: 20px; }
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bd-sub { font-size: 10px; }
 }
 </style>

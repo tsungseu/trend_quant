@@ -10,6 +10,7 @@ import router from './router'
 import '@trendquant/design-tokens/index.css'
 import './styles/tokens.scss'
 import './styles/base.scss'
+import './styles/studio.scss'
 
 // ECharts 按需注册
 import { use } from 'echarts/core'

@@ -1,5 +1,9 @@
 <script setup>
 import { RouterLink, useRoute } from 'vue-router'
+import { useAlertsStore } from '@/stores/alerts'
+
+defineProps({ collapsed: Boolean, mobileOpen: Boolean })
+const alerts = useAlertsStore()
 
 const route = useRoute()
 
@@ -59,8 +63,8 @@ const groups = [
 </script>
 
 <template>
-  <aside class="sidebar">
-    <RouterLink to="/app" class="logo" title="趋势量化 · TrendQuant">
+  <aside id="studio-navigation" class="sidebar" :class="{ 'is-collapsed': collapsed, 'is-open': mobileOpen }" aria-label="Studio 导航">
+    <RouterLink to="/app" class="logo" title="MindQuant Studio · 趋势量化">
       <svg viewBox="0 0 32 32" width="26" height="26">
         <rect width="32" height="32" rx="8" fill="#3b82f6" />
         <path
@@ -72,10 +76,10 @@ const groups = [
           stroke-linejoin="round"
         />
       </svg>
-      <span class="logo-text">趋势量化</span>
+      <span class="logo-text">MindQuant <small>Studio · 量化工作台</small></span>
     </RouterLink>
 
-    <nav>
+    <nav aria-label="工作台模块">
       <div v-for="group in groups" :key="group.key" class="nav-group">
         <div class="group-label">{{ group.label }}</div>
         <RouterLink
@@ -85,11 +89,13 @@ const groups = [
           class="nav-item"
           :class="{ active: isActive(item.to) }"
           :title="item.label"
+          :aria-label="item.label"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
         >
           <span class="ico" v-html="icons[item.icon]"></span>
           <span class="label">{{ item.label }}</span>
           <span v-if="item.soon" class="soon-badge">即将推出</span>
-          <span v-else-if="item.badge" class="nav-badge"></span>
+          <span v-else-if="item.badge && alerts.unreadFundNotifs" class="nav-badge"></span>
         </RouterLink>
       </div>
     </nav>
@@ -99,10 +105,7 @@ const groups = [
         <span class="ico" v-html="icons.settings"></span>
         <span class="label">设置</span>
       </RouterLink>
-      <button class="nav-item" title="帮助">
-        <span class="ico" v-html="icons.help"></span>
-        <span class="label">帮助</span>
-      </button>
+      <div class="workspace-note"><span class="workspace-dot"></span>个人工作空间</div>
     </div>
   </aside>
 </template>
@@ -150,15 +153,15 @@ export const icons = {
 
 .sidebar {
   width: var(--sidebar-w);
-  height: 100vh;
+  height: 100dvh;
   background: var(--sidebar-bg);
   border-right: 1px solid $border-subtle;
   display: flex;
   flex-direction: column;
-  padding: $space-4 $space-2;
+  padding: 0 12px 12px;
   flex-shrink: 0;
   z-index: 10;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-x: hidden;
 }
 
@@ -166,17 +169,20 @@ export const icons = {
   display: flex;
   align-items: center;
   gap: $space-2;
-  padding: 0 $space-2;
-  margin-bottom: $space-5;
+  padding: 0 10px;
+  min-height: 72px;
+  margin-bottom: 12px;
   flex-shrink: 0;
 
   .logo-text {
-    font-size: 13px;
+    font-size: 17px;
     font-weight: 700;
     color: $text-primary;
     white-space: nowrap;
     letter-spacing: 0.01em;
   }
+  svg { flex-shrink: 0; }
+  small { display: block; margin-top: 1px; color: $text-tertiary; font-size: 11px; font-weight: 400; }
 }
 
 nav {
@@ -185,19 +191,21 @@ nav {
   gap: $space-1;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .nav-group {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: $space-3;
+  margin-bottom: 16px;
 }
 
 .group-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: $text-tertiary;
   padding: 0 $space-2;
   margin-bottom: $space-1;
@@ -221,7 +229,7 @@ nav {
   font-size: 9px;
   font-weight: 600;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: 4px;
   color: $gold;
   background: $gold-soft;
   border: 1px solid rgba(245, 183, 61, 0.28);
@@ -231,7 +239,7 @@ nav {
 .nav-item {
   position: relative;
   width: 100%;
-  height: 36px;
+  height: 40px;
   display: flex;
   align-items: center;
   gap: $space-3;
@@ -265,12 +273,26 @@ nav {
     background: $bg-hover;
   }
 
-  &.router-link-active,
   &.active {
     color: $brand;
     background: $brand-soft;
     font-weight: 600;
   }
+}
+
+.workspace-note { padding: 12px 8px 0; color: $text-tertiary; font-size: 11px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.workspace-dot { width: 6px; height: 6px; border-radius: 50%; background: $brand; }
+@media (min-width: 761px) {
+  .sidebar.is-collapsed { width: 64px; padding-inline: 8px; }
+  .sidebar.is-collapsed .logo { padding-inline: 11px; }
+  .sidebar.is-collapsed .logo-text, .sidebar.is-collapsed .label, .sidebar.is-collapsed .group-label,
+  .sidebar.is-collapsed .soon-badge, .sidebar.is-collapsed .workspace-note { display: none; }
+  .sidebar.is-collapsed .nav-item { justify-content: center; }
+  .sidebar.is-collapsed .nav-group { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid $border-subtle; }
+}
+@media (max-width: 760px) {
+  .sidebar { position: fixed; top: 0; left: 0; z-index: 20; width: 224px; visibility: hidden; transform: translateX(-100%); transition: transform .2s ease, visibility .2s; }
+  .sidebar.is-open { visibility: visible; transform: translateX(0); }
 }
 
 .bottom {

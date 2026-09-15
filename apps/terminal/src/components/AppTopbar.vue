@@ -1,15 +1,36 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { useAccountStore } from '@/stores/account'
+import { useRoute, useRouter } from 'vue-router'
 import { useMarketStore } from '@/stores/market'
 import { useThemeStore } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
-import { fmtMoney, fmtPct, fmtThousands } from '@/mock/_helpers'
+import { fmtPct, fmtThousands } from '@/mock/_helpers'
 import { dataModeLabel, runtime } from '@/config/runtime'
 
 const route = useRoute()
-const account = useAccountStore()
+const router = useRouter()
+defineProps({ collapsed: Boolean, mobileOpen: Boolean })
+defineEmits(['toggle-navigation'])
+const searchText = ref('')
+const searchOpen = ref(false)
+const searchRef = ref(null)
+const searchInput = ref(null)
+const searchResults = computed(() => router.getRoutes()
+  .filter((r) => r.meta?.title && !r.path.includes(':'))
+  .filter((r) => `${r.meta.title} ${r.path}`.toLowerCase().includes(searchText.value.trim().toLowerCase())))
+function openResult(path) {
+  searchOpen.value = false
+  searchText.value = ''
+  router.push(path)
+}
+function onKeydown(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    searchInput.value?.focus()
+    searchOpen.value = true
+  }
+  if (e.key === 'Escape') { searchOpen.value = false; pickerOpen.value = false }
+}
 const market = useMarketStore()
 const theme = useThemeStore()
 const alerts = useAlertsStore()
@@ -21,7 +42,6 @@ const pageTitle = computed(() => route.meta?.title || '趋势量化')
 
 const isDark = computed(() => theme.theme === 'dark')
 
-const totalAssets = computed(() => account.info.totalAssets)
 const pickerOpen = ref(false)
 const pickerRef = ref(null)
 const STORAGE_KEY = 'topbar.overseas.indices'
@@ -64,6 +84,7 @@ const visibleOverseas = computed(() => selectedOverseasCodes.value
 )
 
 function onDocClick(e) {
+  if (searchRef.value && !searchRef.value.contains(e.target)) searchOpen.value = false
   if (!pickerRef.value) return
   if (!pickerRef.value.contains(e.target)) pickerOpen.value = false
 }
@@ -91,25 +112,34 @@ onMounted(() => {
   // 海外指数快照由 App.vue 的 startIndexSync() 统一拉取并 60s 轮询，
   // 这里只负责按用户选择渲染，无需重复触发请求
   document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onKeydown)
 })
 </script>
 
 <template>
   <header class="topbar">
+    <button class="icon-btn nav-toggle desktop-toggle" :aria-expanded="!collapsed" aria-controls="studio-navigation" aria-label="切换导航" @click="$emit('toggle-navigation')">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+    </button>
+    <button class="icon-btn nav-toggle mobile-toggle" :aria-expanded="mobileOpen" aria-controls="studio-navigation" aria-label="打开导航" @click="$emit('toggle-navigation')">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+    </button>
     <div class="left">
-      <h1 class="title">{{ pageTitle }}</h1>
+      <nav class="breadcrumb" aria-label="面包屑"><RouterLink to="/app">工作台</RouterLink><span>/</span><span aria-current="page">{{ pageTitle }}</span></nav>
       <div class="left-meta">
         <span class="date">{{ dateLabel }}</span>
         <span class="mode-badge" :class="modeTone" :title="modeLabel">{{ modeLabel }}</span>
       </div>
     </div>
 
-    <!-- 三大指数滚动 -->
-    <div class="indices">
+    <!-- 独立行情栏由 grid 排在顶栏下方 -->
+    <div class="indices" aria-label="市场指数">
+      <span class="market-caption">市场快照</span>
       <div
         v-for="idx in market.stocks.filter((s) => s.isIndex)"
         :key="idx.code"
@@ -139,7 +169,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div ref="pickerRef" class="idx-picker">
-        <button class="add-btn" type="button" @click.stop="togglePicker">+ 添加指数</button>
+        <button class="add-btn" type="button" :aria-expanded="pickerOpen" @click.stop="togglePicker">+ 添加指数</button>
         <div v-if="pickerOpen" class="picker-pop" @click.stop>
           <label v-for="code in overseasAllCodes" :key="code" class="picker-item">
             <input
@@ -154,17 +184,17 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="right">
-      <div class="search">
+      <div ref="searchRef" class="search" @keydown.esc.stop="searchOpen = false">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
         </svg>
-        <input placeholder="搜索股票 / 代码 / 策略" />
-        <kbd>⌘K</kbd>
-      </div>
-
-      <div class="assets">
-        <div class="lbl">总资产</div>
-        <div class="val num">{{ fmtMoney(totalAssets) }}</div>
+        <input ref="searchInput" v-model="searchText" placeholder="查找工作台模块" aria-label="查找工作台模块" :aria-expanded="searchOpen" aria-controls="module-results" @focus="searchOpen = true" @keydown.enter.prevent="searchResults[0] && openResult(searchResults[0].path)" />
+        <kbd>Ctrl K</kbd>
+        <div v-if="searchOpen" id="module-results" class="search-results">
+          <span class="search-heading">快速前往</span>
+          <button v-for="result in searchResults" :key="result.path" @click="openResult(result.path)">{{ result.meta.title }}<span>↗</span></button>
+          <p v-if="!searchResults.length" class="search-empty">没有匹配的模块，请尝试“基金”或“策略”。</p>
+        </div>
       </div>
 
       <button class="icon-btn theme-toggle" :title="isDark ? '切换到浅色' : '切换到深色'" @click="theme.toggle">
@@ -183,14 +213,13 @@ onBeforeUnmount(() => {
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 01-3.4 0" />
         </svg>
         <span v-if="totalNotif" class="dot notif-count">{{ totalNotif }}</span>
-        <span v-else class="dot"></span>
       </RouterLink>
 
       <div class="user">
-        <div class="avatar">徐</div>
+        <div class="avatar">M</div>
         <div class="user-info">
-          <div class="uname">徐先生</div>
-          <div class="uid">VIP · 实盘</div>
+          <div class="uname">个人工作空间</div>
+          <div class="uid">MindQuant Studio</div>
         </div>
       </div>
     </div>
@@ -201,15 +230,30 @@ onBeforeUnmount(() => {
 @use '@/styles/tokens' as *;
 
 .topbar {
-  height: var(--topbar-h);
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(140px, 1fr) auto;
   align-items: center;
-  gap: $space-6;
-  padding: 0 $space-6;
+  column-gap: 12px;
+  padding: 0 24px;
   border-bottom: 1px solid $border-subtle;
   background: $bg-panel;
   flex-shrink: 0;
+  z-index: 12;
 }
+.nav-toggle { grid-column: 1; grid-row: 1; }
+.icon-btn.mobile-toggle { display: none; }
+.left { grid-column: 2; grid-row: 1; padding-block: 14px; }
+.right { grid-column: 3; grid-row: 1; }
+.breadcrumb { display: flex; align-items: center; gap: 10px; font-size: 13px; white-space: nowrap; }
+.breadcrumb a, .breadcrumb > span:first-of-type { color: $text-tertiary; }
+.breadcrumb a:hover { color: $brand; }
+.market-caption { font-size: 11px; color: $text-tertiary; white-space: nowrap; padding-right: 8px; }
+.search-results { position: absolute; top: 42px; right: 0; width: 300px; max-height: 340px; overflow-y: auto; background: $bg-panel; border: 1px solid $border-default; border-radius: 8px; padding: 8px; box-shadow: 0 6px 24px var(--shadow-color); z-index: 15; }
+.search-results button { width: 100%; padding: 10px; text-align: left; display: flex; justify-content: space-between; border-radius: 4px; color: $text-primary; }
+.search-results button:hover { background: $brand-soft; color: $brand; }
+.search-heading { display: block; padding: 6px 10px; font-size: 11px; }
+.search-empty { padding: 12px; font-size: 13px; }
+
 
 .left {
   display: flex;
@@ -237,7 +281,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
   line-height: 1.6;
@@ -270,17 +314,21 @@ onBeforeUnmount(() => {
 }
 
 .indices {
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
-  gap: $space-6;
-  margin-left: auto;
-  margin-right: auto;
+  flex-wrap: wrap;
+  gap: 10px 20px;
   align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid $border-subtle;
 }
+
 .idx {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
   .idx-name {
     font-size: 11px;
     color: $text-tertiary;
@@ -346,6 +394,7 @@ onBeforeUnmount(() => {
 }
 
 .search {
+  position: relative;
   display: flex;
   align-items: center;
   gap: $space-2;
@@ -359,6 +408,7 @@ onBeforeUnmount(() => {
 
   input {
     flex: 1;
+    min-width: 0;
     background: none;
     border: none;
     outline: none;
@@ -369,6 +419,7 @@ onBeforeUnmount(() => {
     }
   }
   kbd {
+    white-space: nowrap;
     font-size: 10px;
     padding: 1px 5px;
     background: $bg-elevated;
@@ -377,18 +428,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.assets {
-  text-align: right;
-  .lbl {
-    font-size: 10px;
-    color: $text-tertiary;
-  }
-  .val {
-    font-size: 15px;
-    font-weight: 700;
-    color: $gold;
-  }
-}
 
 .icon-btn {
   position: relative;
@@ -439,13 +478,13 @@ onBeforeUnmount(() => {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(135deg, $brand, $purple);
+  background: $brand-soft;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: $brand;
 }
 .user-info {
   .uname {
@@ -454,7 +493,26 @@ onBeforeUnmount(() => {
   }
   .uid {
     font-size: 10px;
-    color: $gold;
+    color: $text-tertiary;
   }
+}
+
+@media (max-width: 1100px) {
+  .user-info, .search kbd { display: none; }
+  .search { width: 185px; }
+  .right { gap: 10px; }
+}
+@media (max-width: 760px) {
+  .desktop-toggle { display: none; }
+  .icon-btn.mobile-toggle { display: flex; }
+  .topbar { padding-inline: 16px; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 0 8px; }
+  .date, .user, .search, .market-caption { display: none; }
+  .right { gap: 4px; }
+  .breadcrumb { font-size: 12px; gap: 6px; }
+  .indices { gap: 8px 12px; }
+  .idx { flex-wrap: wrap; gap: 4px; }
+  .idx .num { font-size: 12px; }
+  .idx-picker { margin-left: auto; }
+  .left-meta { margin-top: 4px; }
 }
 </style>
